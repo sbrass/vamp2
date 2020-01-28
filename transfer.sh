@@ -16,6 +16,7 @@ BASICS_FILES=(
 
 UTILITIES_FILES=(
     # format_utils.f90 # Replace with a lighter, minimal functional version.
+    # numeric_utils.f90
     format_defs.f90 # check
 )
 
@@ -29,10 +30,15 @@ RNG_FILES=(
 )
 
 VEGAS_FILES=(
-    vegas.f90_serial
-    vegas.f90_mpi
-    vamp2.f90_serial # check
-    vamp2.f90_mpi    # check
+    # vegas.f90_serial
+    # vegas.f90_mpi
+    # vamp2.f90_serial # check
+    # vamp2.f90_mpi    # check
+)
+
+VEGAS_UTI_FILES=(
+    vegas_uti.f90
+    vamp2_uti.f90
 )
 
 #
@@ -54,6 +60,14 @@ function copy_src_files () {
     done
 }
 
+function copy_test_files () {
+    local dir="${1}"
+    shift
+    for f in ${@}; do
+        cp -a "${SRC}/${dir}/${f}" "test/${f}"
+    done
+}
+
 copy_git_files "basics" ${GIT_BASICS_FILES[@]}
 
 copy_src_files "basics" ${BASICS_FILES[@]}
@@ -61,4 +75,5 @@ copy_src_files "utilities" ${UTILITIES_FILES[@]}
 copy_src_files "system" ${SYSTEM_FILES[@]}
 copy_src_files "rng" ${RNG_FILES[@]}
 copy_src_files "vegas" ${VEGAS_FILES[@]}
+copy_test_files "vegas" ${VEGAS_UTI_FILES[@]}
 

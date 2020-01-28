@@ -88,12 +88,12 @@ contains
     end select
     if (present(string))  msg_buffer = string
     u = output_unit; if (present(unit)) u = unit
-    if (severe) write (unit, "(A)") head_footer
-    if (is_error) write (unit, "(A)") head_footer
-    write (unit, "(A,A,A)") prep, trim(msg_buffer)
-    if (is_error) write (unit, "(A)") head_footer
-    if (severe) write (unit, "(A)") head_footer
-    flush (unit)
+    if (severe) write (u, "(A)") head_footer
+    if (is_error) write (u, "(A)") head_footer
+    write (u, "(A,A,A)") prep, trim(msg_buffer)
+    if (is_error) write (u, "(A)") head_footer
+    if (severe) write (u, "(A)") head_footer
+    flush (u)
     msg_buffer = " "
   end subroutine message_print
 
