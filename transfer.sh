@@ -44,36 +44,25 @@ VEGAS_UTI_FILES=(
 #
 # Missing files: iso_varying_string
 #
-function copy_git_files () {
-    local dir="${1}"
-    shift
+function copy_files () {
+    local src_dir="${1}"
+    local dest_dir="${2}"
+    shift 2
     for f in ${@}; do
-        cp -a "${GIT}/${dir}/${f}" "src/${f}"
+        cp -a "${src_dir}/${f}" "${dest_dir}/${f}"
     done
 }
 
-function copy_src_files () {
-    local dir="${1}"
-    shift
-    for f in ${@}; do
-        cp -a "${SRC}/${dir}/${f}" "src/${f}"
-    done
-}
+for d in "src/utils" "src/rng" "src/vegas" "test"; do
+    mkdir -p "${d}"
+done
 
-function copy_test_files () {
-    local dir="${1}"
-    shift
-    for f in ${@}; do
-        cp -a "${SRC}/${dir}/${f}" "test/${f}"
-    done
-}
+copy_files "${GIT}/basics" "src/utils" ${GIT_BASICS_FILES[@]}
 
-copy_git_files "basics" ${GIT_BASICS_FILES[@]}
-
-copy_src_files "basics" ${BASICS_FILES[@]}
-copy_src_files "utilities" ${UTILITIES_FILES[@]}
-copy_src_files "system" ${SYSTEM_FILES[@]}
-copy_src_files "rng" ${RNG_FILES[@]}
-copy_src_files "vegas" ${VEGAS_FILES[@]}
-copy_test_files "vegas" ${VEGAS_UTI_FILES[@]}
+copy_files "${SRC}/basics" "src/utils" ${BASICS_FILES[@]}
+copy_files "${SRC}/utilities" "src/utils" ${UTILITIES_FILES[@]}
+copy_files "${SRC}/system" "src/utils" ${SYSTEM_FILES[@]}
+copy_files "${SRC}/rng"  "src/rng" ${RNG_FILES[@]}
+copy_files "${SRC}/vegas" "src/vegas" ${VEGAS_FILES[@]}
+copy_files "${SRC}/vegas" "test" ${VEGAS_UTI_FILES[@]}
 
