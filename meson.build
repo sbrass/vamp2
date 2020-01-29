@@ -10,5 +10,5 @@ project('vamp2', 'fortran',
 # vamp2_src = gen.process('src/vamp2.f90_serial')
 
 subdir('src')
+subdir('share')
 subdir('test')
- pf
