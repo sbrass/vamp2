@@ -7,5 +7,5 @@ test('VEGAS.', unit_test, args : [vegas_ut, ref_vegas])
 
 vamp2_ut = executable('vamp2_ut', ['vamp2_ut.f90',
                                    'vamp2_uti.f90'],
-                      link_with : [utils, rng, vegas])
+                      link_with : [utils, rng, vegas, load_balancer])
 test('VAMP2.', unit_test, args : [vamp2_ut, ref_vamp2])
