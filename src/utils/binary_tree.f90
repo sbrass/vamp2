@@ -1,30 +1,3 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
 module binary_tree
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
 
@@ -32,10 +5,23 @@ module binary_tree
 
   private
 
+  type :: binary_tree_iterator_t
+     type(binary_tree_t), pointer :: btree => null ()
+     integer, dimension(:), allocatable :: key
+     integer :: current
+     !! current ∈ {1, N}.
+   contains
+     procedure :: init => binary_tree_iterator_init
+     procedure :: is_iterable => binary_tree_iterator_is_iterable
+     procedure :: next => binary_tree_iterator_next
+     final :: binary_tree_iterator_final
+  end type binary_tree_iterator_t
+
   type :: binary_tree_node_t
      integer :: height = 0
      type(binary_tree_node_t), pointer :: left => null ()
      type(binary_tree_node_t), pointer :: right => null ()
+     !!
      integer :: key = 0
      class(*), pointer :: obj => null ()
    contains
@@ -51,6 +37,7 @@ module binary_tree
      type(binary_tree_node_t), pointer :: root => null ()
    contains
      procedure :: write => binary_tree_write
+     procedure :: get_n_elements => binary_tree_get_n_elements
      procedure :: insert => binary_tree_insert
      procedure, private :: insert_node => binary_tree_insert_node
      procedure, private :: balance => binary_tree_balance
@@ -61,8 +48,66 @@ module binary_tree
      final :: binary_tree_final
   end type binary_tree_t
 
-  public :: binary_tree_t
+  public :: binary_tree_t, binary_tree_iterator_t
 contains
+  !! We store all keys of the binary tree in an index array.
+  !! Flatten the tree O(log n), each access is then O(1).
+  !! However, accessing the corresponding object costs one O(log n).
+  subroutine binary_tree_iterator_init (iterator, btree)
+    class(binary_tree_iterator_t), intent(inout) :: iterator
+    type(binary_tree_t), target :: btree
+    type(binary_tree_node_t), pointer :: node
+    integer :: idx
+    if (.not. btree%get_n_elements () > 0) then
+       write (ERROR_UNIT, "(A)") "Error: Cannot iterate over empty binary tree."
+       stop 1
+    end if
+    iterator%btree => btree
+    allocate (iterator%key(btree%get_n_elements ()), source = 0)
+    iterator%current = 1
+    idx = 1
+    call fill_key (idx, iterator%key, btree%root)
+  contains
+    recursive subroutine fill_key (idx, key, node)
+      integer, intent(inout) :: idx
+      integer, dimension(:), intent(inout) :: key
+      type(binary_tree_node_t), pointer :: node
+      if (associated (node%left)) &
+         call fill_key (idx, key, node%left)
+      if (associated (node%right)) &
+         call fill_key (idx, key, node%right)
+      key(idx) = node%key
+      idx = idx + 1
+    end subroutine fill_key
+  end subroutine binary_tree_iterator_init
+
+  function binary_tree_iterator_is_iterable (iterator) result (flag)
+    class(binary_tree_iterator_t), intent(in) :: iterator
+    logical :: flag
+    flag = iterator%current <= size (iterator%key)
+  end function binary_tree_iterator_is_iterable
+
+  subroutine binary_tree_iterator_next (iterator, key, obj)
+    class(binary_tree_iterator_t), intent(inout) :: iterator
+    integer, intent(out) :: key
+    class(*), pointer, intent(out) :: obj
+    if (.not. iterator%is_iterable ()) then
+       key = 0
+       obj => null ()
+    end if
+    associate (current => iterator%current)
+      key = iterator%key(current)
+      call iterator%btree%search (key, obj)
+      current = current + 1
+    end associate
+  end subroutine binary_tree_iterator_next
+
+  subroutine binary_tree_iterator_final (iterator)
+    type(binary_tree_iterator_t), intent(inout) :: iterator
+    nullify (iterator%btree)
+    if (allocated (iterator%key)) deallocate (iterator%key)
+  end subroutine binary_tree_iterator_final
+
   subroutine binary_tree_node_init (btree_node, key, obj)
     class(binary_tree_node_t), intent(inout) :: btree_node
     integer, intent(in) :: key
@@ -144,6 +189,11 @@ contains
        call btree%root%final ()
     end if
   end subroutine binary_tree_final
+
+  integer function binary_tree_get_n_elements (btree) result (n)
+    class(binary_tree_t), intent(in) :: btree
+    n = btree%n_elements
+  end function binary_tree_get_n_elements
 
   subroutine binary_tree_insert (btree, key, obj)
     class(binary_tree_t), intent(inout) :: btree
