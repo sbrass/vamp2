@@ -35,7 +35,7 @@ module vegas
   use format_defs, only: FMT_17
   use rng_base, only: rng_t
   use rng_stream, only: rng_stream_t
-  use request_callback, only: request_handler_t
+  use request_callback, only: request_handler_t, MPI_TAG_OFFSET
   use mpi_f08 !NODEP!
 
   implicit none
@@ -132,6 +132,7 @@ module vegas
      procedure :: client_handle => vegas_handler_client_handle
      final :: vegas_handler_final
   end type vegas_handler_t
+
   type :: vegas_t
      private
      type(vegas_config_t) :: config
@@ -423,23 +424,24 @@ contains
    end function binary_search
  end function vegas_grid_get_probability
 
-  subroutine vegas_grid_broadcast (self)
+  subroutine vegas_grid_broadcast (self, comm)
     class(vegas_grid_t), intent(inout) :: self
+    type(MPI_COMM), intent(in) :: comm
     integer :: j, ierror
     type(MPI_Request), dimension(self%n_dim + 4) :: status
     ! Blocking
-    call MPI_Bcast (self%n_bins, 1, MPI_INTEGER, 0, MPI_COMM_WORLD)
+    call MPI_Bcast (self%n_bins, 1, MPI_INTEGER, 0, comm)
     ! Non blocking
-    call MPI_Ibcast (self%n_dim, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, status(1))
+    call MPI_Ibcast (self%n_dim, 1, MPI_INTEGER, 0, comm, status(1))
     call MPI_Ibcast (self%x_lower, self%n_dim, &
-         & MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, status(2))
+         & MPI_DOUBLE_PRECISION, 0, comm, status(2))
     call MPI_Ibcast (self%x_upper, self%n_dim, &
-         & MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, status(3))
+         & MPI_DOUBLE_PRECISION, 0, comm, status(3))
     call MPI_Ibcast (self%delta_x, self%n_dim, &
-         & MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, status(4))
+         & MPI_DOUBLE_PRECISION, 0, comm, status(4))
     ndim: do j = 1, self%n_dim
        call MPI_Ibcast (self%xi(1:self%n_bins + 1, j), self%n_bins + 1,&
-            & MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, status(4 + j))
+            & MPI_DOUBLE_PRECISION, 0, comm, status(4 + j))
     end do ndim
     call MPI_Waitall (self%n_dim + 4, status, MPI_STATUSES_IGNORE)
   end subroutine vegas_grid_broadcast
@@ -502,73 +504,75 @@ contains
          & "Event weight excess             = ", self%evt_weight_excess
   end subroutine vegas_result_write
 
-  subroutine vegas_result_send (self, receiver, comm, request)
+  subroutine vegas_result_send (self, receiver, tag, comm, request)
     class(vegas_result_t), intent(in) :: self
     integer, intent(in) :: receiver
+    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     type(MPI_Request), dimension(:), intent(inout) :: request
-    call MPI_Isend (self%it_start, 1, MPI_INTEGER, receiver, 1,&
+    call MPI_Isend (self%it_start, 1, MPI_INTEGER, receiver, tag + 1,&
          & comm, request(1))
-    call MPI_Isend (self%it_num, 1, MPI_INTEGER, receiver , 2,&
+    call MPI_Isend (self%it_num, 1, MPI_INTEGER, receiver , tag + 2,&
          & comm, request(2))
-    call MPI_Isend (self%samples, 1, MPI_INTEGER, receiver, 3,&
+    call MPI_Isend (self%samples, 1, MPI_INTEGER, receiver, tag + 3,&
          & comm, request(3))
-    call MPI_Isend (self%sum_int_wgtd, 1, MPI_DOUBLE_PRECISION, receiver, 4,&
+    call MPI_Isend (self%sum_int_wgtd, 1, MPI_DOUBLE_PRECISION, receiver, tag + 4,&
          & comm, request(4))
-    call MPI_Isend (self%sum_wgts, 1, MPI_DOUBLE_PRECISION, receiver, 5,&
+    call MPI_Isend (self%sum_wgts, 1, MPI_DOUBLE_PRECISION, receiver, tag + 5,&
          & comm, request(5))
-    call MPI_Isend (self%sum_chi, 1, MPI_DOUBLE_PRECISION, receiver, 6,&
+    call MPI_Isend (self%sum_chi, 1, MPI_DOUBLE_PRECISION, receiver, tag + 6,&
          & comm, request(6))
-    call MPI_Isend (self%efficiency, 1, MPI_DOUBLE_PRECISION, receiver, 7,&
+    call MPI_Isend (self%efficiency, 1, MPI_DOUBLE_PRECISION, receiver, tag + 7,&
          & comm, request(7))
-    call MPI_Isend (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, receiver, 8,&
+    call MPI_Isend (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 8,&
          & comm, request(8))
-    call MPI_Isend (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, receiver, 9,&
+    call MPI_Isend (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 9,&
          & comm, request(9))
-    call MPI_Isend (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, receiver, 10,&
+    call MPI_Isend (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, receiver, tag + 10,&
          & comm, request(10))
-    call MPI_Isend (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, receiver, 11,&
+    call MPI_Isend (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 11,&
          & comm, request(11))
-    call MPI_Isend (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, receiver, 12,&
+    call MPI_Isend (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 12,&
          & comm, request(12))
-    call MPI_Isend (self%result, 1, MPI_DOUBLE_PRECISION, receiver, 13,&
+    call MPI_Isend (self%result, 1, MPI_DOUBLE_PRECISION, receiver, tag + 13,&
          & comm, request(13))
-    call MPI_Isend (self%std, 1, MPI_DOUBLE_PRECISION, receiver, 14,&
+    call MPI_Isend (self%std, 1, MPI_DOUBLE_PRECISION, receiver, tag + 14,&
          & comm, request(14))
   end subroutine vegas_result_send
 
-  subroutine vegas_result_receive (self, sender, comm, request)
+  subroutine vegas_result_receive (self, sender, tag, comm, request)
     class(vegas_result_t), intent(inout) :: self
     integer, intent(in) :: sender
+    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(:), intent(inout) :: request
-    call MPI_Irecv (self%it_start, 1, MPI_INTEGER, sender, 1,&
+    call MPI_Irecv (self%it_start, 1, MPI_INTEGER, sender, tag + 1,&
          & comm, request(1))
-    call MPI_Irecv (self%it_num, 1, MPI_INTEGER, sender , 2,&
+    call MPI_Irecv (self%it_num, 1, MPI_INTEGER, sender , tag + 2,&
          & comm, request(2))
-    call MPI_Irecv (self%samples, 1, MPI_INTEGER, sender, 3,&
+    call MPI_Irecv (self%samples, 1, MPI_INTEGER, sender, tag + 3,&
          & comm, request(3))
-    call MPI_Irecv (self%sum_int_wgtd, 1, MPI_DOUBLE_PRECISION, sender, 4,&
+    call MPI_Irecv (self%sum_int_wgtd, 1, MPI_DOUBLE_PRECISION, sender, tag + 4,&
          & comm, request(4))
-    call MPI_Irecv (self%sum_wgts, 1, MPI_DOUBLE_PRECISION, sender, 5,&
+    call MPI_Irecv (self%sum_wgts, 1, MPI_DOUBLE_PRECISION, sender, tag + 5,&
          & comm, request(5))
-    call MPI_Irecv (self%sum_chi, 1, MPI_DOUBLE_PRECISION, sender, 6,&
+    call MPI_Irecv (self%sum_chi, 1, MPI_DOUBLE_PRECISION, sender, tag + 6,&
          & comm, request(6))
-    call MPI_Irecv (self%efficiency, 1, MPI_DOUBLE_PRECISION, sender, 7,&
+    call MPI_Irecv (self%efficiency, 1, MPI_DOUBLE_PRECISION, sender, tag + 7,&
          & comm, request(7))
-    call MPI_Irecv (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, sender, 8,&
+    call MPI_Irecv (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 8,&
          & comm, request(8))
-    call MPI_Irecv (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, sender, 9,&
+    call MPI_Irecv (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 9,&
          & comm, request(9))
-    call MPI_Irecv (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, sender, 10,&
+    call MPI_Irecv (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, sender, tag + 10,&
          & comm, request(10))
-    call MPI_Irecv (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, sender, 11,&
+    call MPI_Irecv (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 11,&
          & comm, request(11))
-    call MPI_Irecv (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, sender, 12,&
+    call MPI_Irecv (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 12,&
          & comm, request(12))
-    call MPI_Irecv (self%result, 1, MPI_DOUBLE_PRECISION, sender, 13,&
+    call MPI_Irecv (self%result, 1, MPI_DOUBLE_PRECISION, sender, tag + 13,&
          & comm, request(13))
-    call MPI_Irecv (self%std, 1, MPI_DOUBLE_PRECISION, sender, 14,&
+    call MPI_Irecv (self%std, 1, MPI_DOUBLE_PRECISION, sender, tag + 14,&
          & comm, request(14))
   end subroutine vegas_result_receive
 
@@ -589,32 +593,34 @@ contains
     call handler%allocate (n_requests)
   end subroutine vegas_handler_init
 
-  subroutine vegas_handler_handle (handler, source, comm)
+  subroutine vegas_handler_handle (handler, source, tag, comm)
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: source
+    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (source, comm, &
+    call handler%result%receive (source, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Irecv (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, source, n_result_requests + 1, comm,&
+            & MPI_DOUBLE_PRECISION, source, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_handle
 
-  subroutine vegas_handler_client_handle (handler, rank, comm)
+  subroutine vegas_handler_client_handle (handler, rank, tag, comm)
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: rank
+    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (rank, comm, &
+    call handler%result%receive (rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, rank, n_result_requests + 1, comm,&
+            & MPI_DOUBLE_PRECISION, rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_client_handle
@@ -715,7 +721,7 @@ contains
     type(vegas_grid_t), intent(in) :: grid
     integer :: j, rank
     logical :: success
-    call MPI_Comm_rank (MPI_COMM_WORLD, rank)
+    call MPI_Comm_rank (self%comm, rank)
     success = .true.
     success = (success .and. (grid%n_dim .eq. self%config%n_dim))
     success = (success .and. all (grid%x_lower .eq. self%grid%x_lower))
@@ -871,12 +877,12 @@ contains
     integer :: j
     type(MPI_Request), dimension(self%config%n_dim + 2) :: request
     call MPI_Isend (self%bin, self%config%n_dim, MPI_INTEGER, receiver, tag + 1&
-         &, MPI_COMM_WORLD, request(1))
+         &, self%comm, request(1))
     call MPI_Isend (self%box, self%config%n_dim, MPI_INTEGER, receiver, tag + 2&
-         &, MPI_COMM_WORLD, request(2))
+         &, self%comm, request(2))
     do j = 1, self%config%n_dim
        call MPI_Isend (self%d(:, j), self%config%n_bins_max,&
-            & MPI_DOUBLE_PRECISION, receiver, tag + j + 2, MPI_COMM_WORLD,&
+            & MPI_DOUBLE_PRECISION, receiver, tag + j + 2, self%comm,&
             & request(j + 2))
     end do
     call MPI_Waitall (self%config%n_dim, request, MPI_STATUSES_IGNORE)
@@ -889,12 +895,12 @@ contains
     integer :: j
     type(MPI_Request), dimension(self%config%n_dim + 2) :: request
     call MPI_Irecv (self%bin, self%config%n_dim, MPI_INTEGER, sender, tag + 1&
-         &, MPI_COMM_WORLD, request(1))
+         &, self%comm, request(1))
     call MPI_Irecv (self%box, self%config%n_dim, MPI_INTEGER, sender, tag + 2&
-         &, MPI_COMM_WORLD, request(2))
+         &, self%comm, request(2))
     do j = 1, self%config%n_dim
        call MPI_Irecv (self%d(:, j), self%config%n_bins_max,&
-            & MPI_DOUBLE_PRECISION, sender, tag + j + 2, MPI_COMM_WORLD,&
+            & MPI_DOUBLE_PRECISION, sender, tag + j + 2, self%comm,&
             & request(j + 2))
     end do
     call MPI_Waitall (self%config%n_dim, request, MPI_STATUSES_IGNORE)
@@ -1034,8 +1040,9 @@ contains
     cumulative_std = 0.
     n_size = 1
     n_dim_par = floor (self%config%n_dim / 2.)
-    call MPI_Comm_size (MPI_COMM_WORLD, n_size)
-    call MPI_Comm_rank (MPI_COMM_WORLD, rank)
+    call MPI_Comm_size (self%comm, n_size)
+    call MPI_Comm_rank (self%comm, rank)
+    print *, "=========> VEGAS", n_size, rank
     if (verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
@@ -1058,7 +1065,7 @@ contains
        end select
        if (self%is_parallelizable ()) then
           grid = self%get_grid ()
-          call grid%broadcast ()
+          call grid%broadcast (self%comm)
           call self%set_grid (grid)
        end if
        if (self%is_parallelizable ()) then
@@ -1215,21 +1222,21 @@ contains
       root_total_integral = 0._default
       root_total_sq_integral = 0._default
       call MPI_Ireduce (sum_abs_f_pos, root_sum_abs_f_pos, 1, MPI_DOUBLE_PRECISION,&
-           & MPI_SUM, 0, MPI_COMM_WORLD, status(1))
+           & MPI_SUM, 0, self%comm, status(1))
       call MPI_Ireduce (sum_abs_f_neg, root_sum_abs_f_neg, 1, MPI_DOUBLE_PRECISION,&
-           & MPI_SUM, 0, MPI_COMM_WORLD, status(2))
+           & MPI_SUM, 0, self%comm, status(2))
       call MPI_Ireduce (max_abs_f_pos, root_max_abs_f_pos, 1, MPI_DOUBLE_PRECISION,&
-           & MPI_MAX, 0, MPI_COMM_WORLD, status(3))
+           & MPI_MAX, 0, self%comm, status(3))
       call MPI_Ireduce (max_abs_f_neg, root_max_abs_f_neg, 1, MPI_DOUBLE_PRECISION,&
-           & MPI_MAX, 0, MPI_COMM_WORLD, status(4))
+           & MPI_MAX, 0, self%comm, status(4))
       call MPI_Ireduce (total_integral, root_total_integral, 1, MPI_DOUBLE_PRECISION,&
-           & MPI_SUM, 0, MPI_COMM_WORLD, status(5))
+           & MPI_SUM, 0, self%comm, status(5))
       call MPI_Ireduce (total_sq_integral, root_total_sq_integral, 1,&
-           & MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, status(6))
+           & MPI_DOUBLE_PRECISION, MPI_SUM, 0, self%comm, status(6))
       do j = 1, self%config%n_dim
          call MPI_Ireduce (self%d(1:self%config%n_bins, j), root_d(1:self%config&
               &%n_bins, j), self%config%n_bins, MPI_DOUBLE_PRECISION, MPI_SUM, 0,&
-              & MPI_COMM_WORLD, status(6 + j))
+              & self%comm, status(6 + j))
       end do
       call MPI_Waitall (self%config%n_dim + 6, status, MPI_STATUSES_IGNORE)
       if (rank == 0) sum_abs_f_pos = root_sum_abs_f_pos

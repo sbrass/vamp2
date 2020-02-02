@@ -9,3 +9,8 @@ utils = library('utils', ['constants.f90',
                           'binary_tree.f90',
                           'iterator.f90',
                           'queue.f90'])
+
+
+signal = library('signal', ['signal.f90',
+                            'signal.c'],
+                 include_directories : inc)

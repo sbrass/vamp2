@@ -1,12 +1,11 @@
 module binary_tree
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
+  use iso_fortran_env, only: ERROR_UNIT
 
   implicit none
 
   private
 
   type :: binary_tree_iterator_t
-     type(binary_tree_t), pointer :: btree => null ()
      integer, dimension(:), allocatable :: key
      integer :: current
      !! current ∈ {1, N}.
@@ -14,7 +13,6 @@ module binary_tree
      procedure :: init => binary_tree_iterator_init
      procedure :: is_iterable => binary_tree_iterator_is_iterable
      procedure :: next => binary_tree_iterator_next
-     final :: binary_tree_iterator_final
   end type binary_tree_iterator_t
 
   type :: binary_tree_node_t
@@ -58,15 +56,10 @@ contains
     type(binary_tree_t), target :: btree
     type(binary_tree_node_t), pointer :: node
     integer :: idx
-    if (.not. btree%get_n_elements () > 0) then
-       write (ERROR_UNIT, "(A)") "Error: Cannot iterate over empty binary tree."
-       stop 1
-    end if
-    iterator%btree => btree
-    allocate (iterator%key(btree%get_n_elements ()), source = 0)
     iterator%current = 1
-    idx = 1
-    call fill_key (idx, iterator%key, btree%root)
+    allocate (iterator%key(btree%get_n_elements ()), source = 0)
+    if (.not. btree%get_n_elements () > 0) return
+    idx = 1; call fill_key (idx, iterator%key, btree%root)
   contains
     recursive subroutine fill_key (idx, key, node)
       integer, intent(inout) :: idx
@@ -87,26 +80,16 @@ contains
     flag = iterator%current <= size (iterator%key)
   end function binary_tree_iterator_is_iterable
 
-  subroutine binary_tree_iterator_next (iterator, key, obj)
+  subroutine binary_tree_iterator_next (iterator, key)
     class(binary_tree_iterator_t), intent(inout) :: iterator
     integer, intent(out) :: key
-    class(*), pointer, intent(out) :: obj
     if (.not. iterator%is_iterable ()) then
        key = 0
-       obj => null ()
+    else
+       key = iterator%key(iterator%current)
+       iterator%current = iterator%current + 1
     end if
-    associate (current => iterator%current)
-      key = iterator%key(current)
-      call iterator%btree%search (key, obj)
-      current = current + 1
-    end associate
   end subroutine binary_tree_iterator_next
-
-  subroutine binary_tree_iterator_final (iterator)
-    type(binary_tree_iterator_t), intent(inout) :: iterator
-    nullify (iterator%btree)
-    if (allocated (iterator%key)) deallocate (iterator%key)
-  end subroutine binary_tree_iterator_final
 
   subroutine binary_tree_node_init (btree_node, key, obj)
     class(binary_tree_node_t), intent(inout) :: btree_node

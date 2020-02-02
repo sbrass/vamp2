@@ -65,9 +65,11 @@ contains
     state%indices = [(rank, rank = 1, n_workers)]
   end subroutine request_state_init
 
-  pure function request_state_is_terminated (state) result (flag)
+  ! pure function request_state_is_terminated (state) result (flag)
+  function request_state_is_terminated (state) result (flag)
     class(request_state_t), intent(in) :: state
     logical :: flag
+    print *, "TERMINATED: ", state%terminated
     flag = all (state%terminated)
   end function request_state_is_terminated
 
@@ -91,6 +93,7 @@ contains
     do i = 1, state%n_workers_done
        rank = state%indices(i)
        handler = state%handler(rank)
+       print *, "RANK: ", rank, " | RECEIVE REQUEST"
        call MPI_IRECV (handler, 1, MPI_INTEGER, &
             rank, MPI_ANY_TAG, state%comm, state%request(rank), error)
        if (error /= 0) then

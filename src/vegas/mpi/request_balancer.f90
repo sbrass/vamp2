@@ -298,12 +298,19 @@ contains
     end associate
   end subroutine request_balancer_assign_resource
 
+  !> Is a worker and has he a assignable resource.
+  !!
+  !! The answer depends on two factors:
+  !! (i) Is there still work in the associated partition?
+  !! (ii) Is the worker already assigned? E.g. as part of a group and needs to retrieve its resources?
+  !! Is either one of the cases true, the worker has an assignable resource.
   pure logical function request_balancer_is_assignable (balancer, worker_id) result (flag)
     class(request_balancer_t), intent(in) :: balancer
     integer, intent(in) :: worker_id
     integer :: partition_id
     partition_id = balancer%worker(worker_id)%partition
-    flag = balancer%partition_state(partition_id)%has_unassigned_resource ()
+    flag = balancer%worker(worker_id)%assigned .or. &
+         balancer%partition_state(partition_id)%has_unassigned_resource ()
   end function request_balancer_is_assignable
 
   logical function request_balancer_is_pending (balancer) result (flag)

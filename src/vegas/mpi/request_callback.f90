@@ -37,6 +37,8 @@ module request_callback
 
   private
 
+  integer, parameter, public :: MPI_TAG_OFFSET = 128
+
   !> Request handler.
   !!
   !! A request handler allows to dispatch an object for communication a priori
@@ -72,6 +74,8 @@ module request_callback
      procedure :: write => request_handler_manager_write
      procedure :: add => request_handler_manager_add
      procedure :: has_handler => request_handler_manager_has_handler
+     procedure :: wait => request_handler_manager_wait
+     procedure :: waitall => request_handler_manager_waitall
      procedure, private :: handler_at => request_handler_manager_handler_at
      procedure :: callback => request_handler_manager_callback
      procedure :: client_callback => request_handler_manager_client_callback
@@ -80,23 +84,30 @@ module request_callback
   abstract interface
      !> Handle a request from server side.
      !!
+     !! The message tag can be used in order to uniquify the respective messages between master and slave.
+     !! E.g. by explicitly setting it, or by using it in a computation i * N_R + j, i ∈ {1, …, N} and j ∈ {1, …, N_R}.
+     !!
      !! \param[in] source Integer rank of the source in comm.
+     !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_handle (handler, source, comm)
+     subroutine request_handler_handle (handler, source, tag, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
        integer, intent(in) :: source
+       integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_handle
 
      !> Handle a request from client side.
      !!
      !! \param[in] rank Integer of the receiver in comm.
+     !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_client_handle (handler, rank, comm)
+     subroutine request_handler_client_handle (handler, rank, tag, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
        integer, intent(in) :: rank
+       integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_client_handle
   end interface
@@ -171,6 +182,26 @@ contains
     call rhm%tree%insert (handler_id, obj)
   end subroutine request_handler_manager_add
 
+  subroutine request_handler_manager_wait (rhm, handler_id)
+    class(request_handler_manager_t), intent(inout) :: rhm
+    integer, intent(in) :: handler_id
+    class(request_handler_t), pointer :: handler
+    call rhm%handler_at (handler_id, handler)
+    call handler%waitall ()
+  end subroutine request_handler_manager_wait
+
+  subroutine request_handler_manager_waitall (rhm)
+    class(request_handler_manager_t), intent(inout) :: rhm
+    type(binary_tree_iterator_t) :: iterator
+    integer :: handler_id
+    class(*), pointer :: obj
+    call iterator%init (rhm%tree)
+    do while (iterator%is_iterable ())
+       call iterator%next (handler_id)
+       call rhm%wait (handler_id)
+    end do
+  end subroutine request_handler_manager_waitall
+
   subroutine request_handler_manager_handler_at (rhm, handler_id, handler)
     class(request_handler_manager_t), intent(in) :: rhm
     integer, intent(in) :: handler_id
@@ -200,7 +231,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%handle (source, comm)
+    call handler%handle (source = source, tag = handler_id, comm = comm)
   end subroutine request_handler_manager_callback
 
   subroutine request_handler_manager_client_callback (rhm, handler_id, source, comm)
@@ -211,7 +242,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%client_handle (source, comm)
+    call handler%client_handle (rank = source, tag = handler_id, comm = comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
 

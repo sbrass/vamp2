@@ -1,32 +1,5 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
-
 module vamp2
+  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
 
   use kinds, only: default
   use io_units
@@ -54,18 +27,18 @@ module vamp2
   public :: vamp2_equivalences_t
   public :: vamp2_t
 
-integer, parameter, public :: &
-     VEQ_IDENTITY = 0, VEQ_INVERT = 1, VEQ_SYMMETRIC = 2, VEQ_INVARIANT = 3
+  integer, parameter, public :: &
+       VEQ_IDENTITY = 0, VEQ_INVERT = 1, VEQ_SYMMETRIC = 2, VEQ_INVARIANT = 3
   character(len=*), parameter, private :: &
-     descr_fmt =         "(1X,A)", &
-     integer_fmt =       "(1X,A18,1X,I15)", &
-     integer_array_fmt = "(1X,I18,1X,I15)", &
-     logical_fmt =       "(1X,A18,1X,L1)", &
-     double_fmt =        "(1X,A18,1X,E24.16E4)", &
-     double_array_fmt =  "(1X,I18,1X,E24.16E4)", &
-     double_array_pac_fmt = "(1X,I18,1X,E16.8E4)", &
-     double_array2_fmt = "(1X,2(1X,I8),1X,E24.16E4)", &
-     double_array2_pac_fmt = "(1X,2(1X,I8),1X,E16.8E4)"
+       descr_fmt =         "(1X,A)", &
+       integer_fmt =       "(1X,A18,1X,I15)", &
+       integer_array_fmt = "(1X,I18,1X,I15)", &
+       logical_fmt =       "(1X,A18,1X,L1)", &
+       double_fmt =        "(1X,A18,1X,E24.16E4)", &
+       double_array_fmt =  "(1X,I18,1X,E24.16E4)", &
+       double_array_pac_fmt = "(1X,I18,1X,E16.8E4)", &
+       double_array2_fmt = "(1X,2(1X,I8),1X,E24.16E4)", &
+       double_array2_pac_fmt = "(1X,2(1X,I8),1X,E16.8E4)"
 
   type, abstract, extends(vegas_func_t) :: vamp2_func_t
      integer :: current_channel = 0
@@ -120,17 +93,17 @@ integer, parameter, public :: &
   end type vamp2_equi_t
 
   type :: vamp2_equivalences_t
-      private
-      integer :: n_eqv = 0
-      integer :: n_channel = 0
-      integer :: n_dim = 0
-      type(vamp2_equi_t), dimension(:), allocatable :: eqv
-      integer, dimension(:), allocatable :: map
-      integer, dimension(:), allocatable :: multiplicity
-      integer, dimension(:), allocatable :: symmetry
-      logical, dimension(:), allocatable :: independent
-      integer, dimension(:), allocatable :: equivalent_to_ch
-      logical, dimension(:, :), allocatable :: dim_is_invariant
+     private
+     integer :: n_eqv = 0
+     integer :: n_channel = 0
+     integer :: n_dim = 0
+     type(vamp2_equi_t), dimension(:), allocatable :: eqv
+     integer, dimension(:), allocatable :: map
+     integer, dimension(:), allocatable :: multiplicity
+     integer, dimension(:), allocatable :: symmetry
+     logical, dimension(:), allocatable :: independent
+     integer, dimension(:), allocatable :: equivalent_to_ch
+     logical, dimension(:, :), allocatable :: dim_is_invariant
    contains
      procedure :: write => vamp2_equivalences_write
      procedure, public :: is_allocated => vamp2_equivalences_is_allocated
@@ -182,17 +155,17 @@ integer, parameter, public :: &
      procedure, public :: generate_unweighted => vamp2_generate_unweighted_event
      procedure, public :: write_grids => vamp2_write_grids
      procedure, public :: read_grids => vamp2_read_grids
-   procedure :: write_binary_grids => vamp2_write_binary_grids
-   procedure :: read_binary_grids => vamp2_read_binary_grids
+     procedure :: write_binary_grids => vamp2_write_binary_grids
+     procedure :: read_binary_grids => vamp2_read_binary_grids
   end type vamp2_t
 
- abstract interface
-    subroutine vamp2_func_evaluate_maps (self, x)
-      import :: vamp2_func_t, default
-      class(vamp2_func_t), intent(inout) :: self
-      real(default), dimension(:), intent(in) :: x
-    end subroutine vamp2_func_evaluate_maps
- end interface
+  abstract interface
+     subroutine vamp2_func_evaluate_maps (self, x)
+       import :: vamp2_func_t, default
+       class(vamp2_func_t), intent(inout) :: self
+       real(default), dimension(:), intent(in) :: x
+     end subroutine vamp2_func_evaluate_maps
+  end interface
 
   abstract interface
      real(default) function vamp2_func_evaluate_func (self, x) result (f)
@@ -406,11 +379,11 @@ contains
   end function vamp2_equivalences_is_allocated
 
   subroutine vamp2_equivalences_get_channels (eqv, i_eqv, dest, src)
-   class(vamp2_equivalences_t), intent(in) :: eqv
-   integer, intent(in) :: i_eqv
-   integer, intent(out) :: dest, src
-   dest = eqv%eqv(i_eqv)%ch
-   src = eqv%eqv(i_eqv)%ch_src
+    class(vamp2_equivalences_t), intent(in) :: eqv
+    integer, intent(in) :: i_eqv
+    integer, intent(out) :: dest, src
+    dest = eqv%eqv(i_eqv)%ch
+    src = eqv%eqv(i_eqv)%ch_src
   end subroutine vamp2_equivalences_get_channels
 
   function vamp2_equivalences_get_mode (eqv, i_eqv) result (mode)
@@ -435,7 +408,7 @@ contains
     integer, dimension(:), intent(in) :: perm, mode
     integer :: i
     if (dest < 1 .or. dest > eqv%n_channel)  call msg_bug &
-       ("VAMP2: set_equivalences: destination channel out of range.")
+         ("VAMP2: set_equivalences: destination channel out of range.")
     if (src < 1 .or. src > eqv%n_channel)  call msg_bug &
          ("VAMP2: set_equivalences: source channel out of range.")
     if (size(perm) /= eqv%n_dim)  call msg_bug &
@@ -779,6 +752,10 @@ contains
     logical :: verbose = .false.
     type(request_t) :: request
     class(request_handler_t), pointer :: handler
+    !!
+    integer :: rank
+    call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
+    !!
     if (present (iterations)) self%config%iterations = iterations
     if (present (opt_reset_result)) reset_result = opt_reset_result
     if (present (opt_adapt_weight)) adapt_weight = opt_adapt_weight
@@ -795,18 +772,23 @@ contains
        total_sq_integral = 0._default
        total_variance = 0._default
        call self%integrate_init_iteration ()
+       !! Move to integrate_init_iteration ...
        do ch = 1, self%config%n_channel
           func%wi(ch) = self%weight(ch)
           func%grids(ch) = self%integrator(ch)%get_grid ()
        end do
        ch = 1
-       channel: do while (ch <= self%config%n_channel)
+       channel: do
+          !! BEGIN MPI
           if (self%caller%is_master ()) then
+             write (ERROR_UNIT, "(A)") "[MASTER] handle workload"
              call self%caller%handle_workload ()
              exit channel
           end if
           call self%caller%request_workload (request)
+          print *, "RANK: ", rank, " | ", request
           if (request%terminate) exit channel
+          if (ch > self%config%n_channel) exit channel !! NON-MPI
           do while (request%handler_id > ch)
              !! Advance RNG for each not-computed channel.
              select type (rng)
@@ -816,22 +798,34 @@ contains
              ch = ch + 1
           end do
           if (request%group) then
+             print *, "RANK: ", rank, " | SET GROUP COMM."
              call self%integrator(ch)%set_comm (request%comm)
           else
              call self%integrator(ch)%set_comm (MPI_COMM_WORLD)
           end if
+          !! END MPI
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
                & func, rng, iterations, opt_refine_grid = .false., opt_verbose = verbose)
+          !! BEGIN MPI
+          if (request%callback) then
+             call self%integrator(ch)%allocate_handler (handler)
+             call self%caller%add_handler (ch, handler)
+             print *, "RANK: ", rank, " | CALLBACK AND RELEASE REQUEST"
+             call self%caller%handler_and_release_workload (request)
+          else
+             print *, "RANK: ", rank, " | RELEASE REQUEST"
+             call self%caller%release_workload (request)
+          end if
+          !! END MPI
           ch = ch + 1
        end do channel
-       if (request%callback) then
-          call self%integrator(ch)%allocate_handler (handler)
-          call self%caller%add_handler (ch, handler)
-          call self%caller%handler_and_release_workload (request)
-       else
-          call self%caller%release_workload (request)
-       end if
+       print *, "WAITALL"
+       call self%caller%await_handler ()
+       ! call self%caller%handler_waitall ()
+       print *, "MPI_BARRIER"
+       call MPI_BARRIER (MPI_COMM_WORLD)
+       if (.not. self%caller%is_master ()) return
        total_integral = dot_product (self%weight, self%integrator%get_integral ())
        total_sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
        total_variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
@@ -960,6 +954,7 @@ contains
        call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
        call balancer%add_parallel_grid (parallel_grid)
        call balancer%add_channel_weight (self%weight)
+       call balancer%write (ERROR_UNIT)
     end select
     call self%caller%add_balancer (balancer)
   end subroutine vamp2_init_balancer
@@ -973,7 +968,7 @@ contains
          & MPI_COMM_WORLD, request)
     do ch = 1, self%config%n_channel
        grid = self%integrator(ch)%get_grid ()
-       call grid%broadcast ()
+       call grid%broadcast (MPI_COMM_WORLD)
        call self%integrator(ch)%set_grid (grid)
     end do
     call MPI_Wait (request, MPI_STATUS_IGNORE)

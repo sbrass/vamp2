@@ -1,31 +1,3 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
-
 module request_caller
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use diagnostics
@@ -33,7 +5,7 @@ module request_caller
   use request_balancer
   use request_state
   use request_callback
-  
+
   use mpi_f08 !NODEP!
 
   implicit none
@@ -75,6 +47,7 @@ module request_caller
      procedure :: write => request_caller_write
      procedure :: add_balancer => request_caller_add_balancer
      procedure :: add_handler => request_caller_add_handler
+     procedure :: await_handler => request_caller_await_handler
      procedure :: is_master => request_caller_is_master
      procedure :: get_n_workers => request_caller_get_n_workers
      procedure, private :: provide_communicator_group => request_caller_provide_communicator_group
@@ -126,6 +99,11 @@ contains
     call caller%handler%add (handler_id, handler)
   end subroutine request_caller_add_handler
 
+  subroutine request_caller_await_handler (caller)
+    class(request_caller_t), intent(inout) :: caller
+    call caller%handler%waitall ()
+  end subroutine request_caller_await_handler
+
   integer function request_caller_get_n_workers (caller) result (n_workers)
     class(request_caller_t), intent(in) :: caller
     n_workers = caller%n_workers
@@ -156,6 +134,8 @@ contains
           if (.not. allocated (caller%balancer)) tag = MPI_TAG_TERMINATE
           select case (tag)
           case (MPI_TAG_REQUEST)
+             print *, "[REQUEST]", source, tag, handler
+             print *, "--------->", caller%balancer%is_assignable (source)
              if (caller%balancer%is_assignable (source)) then
                 call caller%balancer%assign_worker (source, handler)
                 select case (caller%balancer%get_resource_mode (source))
@@ -166,6 +146,7 @@ contains
                    call caller%provide_communicator_group (source, handler)
                 end select
              else
+                print *, "---------> TERMINATE"
                 call caller%state%terminate (source)
              end if
           case (MPI_TAG_HANDLER_AND_RELEASE)
@@ -300,6 +281,7 @@ contains
     type(MPI_GROUP) :: group
     integer :: result, error
     call move_alloc (worker, cache%worker)
+    print *, "CACHE UPDATE", cache%worker, "(", size (cache%worker), ")"
     call MPI_GROUP_INCL (cache%parent_group, size (cache%worker), cache%worker, group)
     call MPI_GROUP_COMPARE (cache%group, group, result)
     if (result == MPI_UNEQUAL) then
@@ -308,10 +290,13 @@ contains
        !! Group-local operation. However, time consuming.
        call MPI_COMM_CREATE_GROUP (cache%parent_comm, cache%group, tag, &
             cache%comm, error)
+       print *, cache%parent_comm, cache%comm
        if (error > 0) then
           write (ERROR_UNIT, "(A)") "Error occured during communicator creation..."
           stop 1
        end if
+    else
+       print *, "CACHE UPDATE: GROUPS ARE (NEARLY) IDENTICAL"
     end if
   end subroutine request_group_cache_update
 
@@ -321,4 +306,3 @@ contains
     comm = cache%comm
   end subroutine request_group_cache_get_comm
 end module request_caller
-
