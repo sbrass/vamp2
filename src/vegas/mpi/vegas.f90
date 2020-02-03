@@ -164,6 +164,8 @@ module vegas
      procedure, public :: get_variance => vegas_get_variance
      procedure, public :: get_efficiency => vegas_get_efficiency
      procedure, public :: get_max_abs_f => vegas_get_max_abs_f
+     procedure, public :: get_sum_abs_f_pos => vegas_get_sum_abs_f_pos
+     procedure, public :: get_sum_abs_f_neg => vegas_get_sum_abs_f_neg
      procedure, public :: get_max_abs_f_pos => vegas_get_max_abs_f_pos
      procedure, public :: get_max_abs_f_neg => vegas_get_max_abs_f_neg
      procedure, public :: get_evt_weight => vegas_get_evt_weight
@@ -906,6 +908,16 @@ contains
        max_abs_f = self%result%max_abs_f
     end if
   end function vegas_get_max_abs_f
+
+  elemental real(default) function vegas_get_sum_abs_f_pos (self) result (sum_abs_f)
+    class(vegas_t), intent(in) :: self
+    sum_abs_f = self%result%efficiency_pos * self%result%max_abs_f_pos
+  end function vegas_get_sum_abs_f_pos
+
+  elemental real(default) function vegas_get_sum_abs_f_neg (self) result (sum_abs_f)
+    class(vegas_t), intent(in) :: self
+    sum_abs_f = self%result%efficiency_neg * self%result%max_abs_f_neg
+  end function vegas_get_sum_abs_f_neg
 
   elemental real(default) function vegas_get_max_abs_f_pos (self) result (max_abs_f)
     class(vegas_t), intent(in) :: self
