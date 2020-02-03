@@ -1082,15 +1082,15 @@ contains
 
   end subroutine vegas_refine_grid
 
-  subroutine vegas_integrate (self, func, rng, iterations, opt_reset_result,&
-       & opt_refine_grid, opt_verbose, result, abserr)
+  subroutine vegas_integrate (self, func, rng, iterations, reset_result,&
+       & refine_grid, verbose, result, abserr)
     class(vegas_t), intent(inout) :: self
     class(vegas_func_t), intent(inout) :: func
     class(rng_t), intent(inout) :: rng
     integer, intent(in), optional :: iterations
-    logical, intent(in), optional :: opt_reset_result
-    logical, intent(in), optional :: opt_refine_grid
-    logical, intent(in), optional :: opt_verbose
+    logical, intent(in), optional :: reset_result
+    logical, intent(in), optional :: refine_grid
+    logical, intent(in), optional :: verbose
     real(default), optional, intent(out) :: result, abserr
     integer :: it, k
     real(default), dimension(self%config%n_dim) :: x
@@ -1100,21 +1100,18 @@ contains
     real(default) :: cumulative_int, cumulative_std
     real(default) :: sum_abs_f_pos, max_abs_f_pos
     real(default) :: sum_abs_f_neg, max_abs_f_neg
-    logical :: reset_result = .true.
-    logical :: refine_grid = .true.
-    logical :: verbose = .false.
+    logical :: opt_reset_result
+    logical :: opt_refine_grid
+    logical :: opt_verbose
     integer :: n_size
     integer :: n_dim_par
     logical :: box_success
     ! MPI-specific variables below
     integer :: rank
     type(vegas_grid_t) :: grid
-    if (present (iterations)) self%config%iterations = iterations
-    if (present (opt_reset_result)) reset_result = opt_reset_result
-    if (present (opt_refine_grid)) refine_grid = opt_refine_grid
-    if (present (opt_verbose)) verbose = opt_verbose
+    call set_options ()
     call self%init_grid ()
-    if (reset_result) call self%result%reset ()
+    if (opt_reset_result) call self%result%reset ()
     self%result%it_start = self%result%it_num
     cumulative_int = 0.
     cumulative_std = 0.
@@ -1123,7 +1120,7 @@ contains
     call MPI_Comm_size (self%comm, n_size)
     call MPI_Comm_rank (self%comm, rank)
     print *, "=========> VEGAS", n_size, rank
-    if (verbose) then
+    if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
     iteration: do it = 1, self%config%iterations
@@ -1218,17 +1215,27 @@ contains
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
          cumulative_std = sqrt (1 / result%sum_wgts)
        end associate
-       if (verbose) then
+       if (opt_verbose) then
           write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                & it, self%config%n_calls, cumulative_int, cumulative_std, &
                & self%result%chi2, self%result%efficiency
           call msg_message ()
        end if
-       if (refine_grid) call self%refine ()
+       if (opt_refine_grid) call self%refine ()
     end do iteration
     if (present(result)) result = cumulative_int
     if (present(abserr)) abserr = abs(cumulative_std)
   contains
+    subroutine set_options ()
+      if (present (iterations)) self%config%iterations = iterations
+      opt_reset_result = .true.
+      if (present (reset_result)) opt_reset_result = reset_result
+      opt_refine_grid = .true.
+      if (present (refine_grid)) opt_refine_grid = refine_grid
+      opt_verbose = .false.
+      if (present (verbose)) opt_verbose = verbose
+    end subroutine set_options
+
     subroutine increment_box_coord (box, success)
       integer, dimension(:), intent(inout) :: box
       logical, intent(out) :: success
