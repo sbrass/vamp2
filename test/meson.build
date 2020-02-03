@@ -61,6 +61,9 @@ test('Binary tree.', binary_tree_1, should_fail : true)
 vegas_ut = executable('vegas_ut', ['vegas_ut.f90',
                                    'vegas_uti.f90'],
                       link_with : [utils, rng, vegas])
+vegas_mpi_ut = executable('vegas_mpi_ut', 'vegas_mpi_ut.f90',
+                         link_with : [utils, rng, vegas])
+test('VEGAS (MPI).', unit_test, args : [vegas_mpi_ut, ref_vegas_mpi])
 test('VEGAS.', unit_test, args : [vegas_ut, ref_vegas])
 
 vamp2_ut = executable('vamp2_ut', ['vamp2_ut.f90',

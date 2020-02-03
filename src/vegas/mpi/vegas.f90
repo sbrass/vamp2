@@ -578,8 +578,9 @@ contains
 
   pure integer function vegas_result_get_n_requests (result) result (n_requests)
     class(vegas_result_t), intent(in) :: result
-    n_requests = 14 
+    n_requests = 14
   end function vegas_result_get_n_requests
+
   subroutine vegas_handler_init (handler, result, d)
     class(vegas_handler_t), intent(inout) :: handler
     type(vegas_result_t), intent(in), target :: result
@@ -653,6 +654,9 @@ contains
     call self%set_limits (self%grid%x_lower, self%grid%x_upper)
     call self%reset_grid ()
     call self%reset_result ()
+    !! BEGIN MPI
+    call self%set_comm (MPI_COMM_WORLD)
+    !! END MPI
   end function vegas_init
 
   subroutine vegas_final (self)
@@ -665,6 +669,7 @@ contains
     deallocate (self%box)
     deallocate (self%bin)
   end subroutine vegas_final
+
   subroutine vegas_set_limits (self, x_lower, x_upper)
     class(vegas_t), intent(inout) :: self
     real(default), dimension(:), intent(in) :: x_lower
@@ -744,6 +749,7 @@ contains
     type(MPI_COMM), intent(in) :: comm
     self%comm = comm
   end subroutine vegas_set_comm
+
   elemental logical function vegas_is_parallelizable (self, opt_n_size) result (flag)
     class(vegas_t), intent(in) :: self
     integer, intent(in), optional :: opt_n_size
