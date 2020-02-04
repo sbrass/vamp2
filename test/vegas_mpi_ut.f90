@@ -48,7 +48,10 @@ program main
        x_upper = pi
   real(default) :: result, abserr
 
+  integer :: rank
+
   call MPI_INIT ()
+  call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
 
   allocate (rng_stream_t :: rng)
   call rng%init ()
@@ -58,22 +61,30 @@ program main
 
   call mc%set_limits (x_lower, x_upper)
 
-  write (ERROR_UNIT, "(A,1X,I0)") "Warmup calls:", 10000
+  call mc%set_comm (MPI_COMM_WORLD)
+
   call mc%set_calls (10000)
-
   call mc%integrate (func, rng, 3, result=result, abserr=abserr)
-  write (ERROR_UNIT, "(A,1X,F9.7,1X,A,1X,F9.7)") "Warmup:", result, "±", abserr
+  if (rank == 0) &
+       call print_result (10000, result, test_func_exact_result, abserr)
 
-  write (ERROR_UNIT, "(A,1X,I0)") "Final calls:", 2000
   call mc%set_calls (2000)
   call mc%integrate (func, rng, 3, opt_refine_grid = .false., result=result, abserr=abserr)
-  write (ERROR_UNIT, "(A,1X,F9.7,1X,A,1X,F9.7)") "Final:", result, "±", abserr
-  write (ERROR_UNIT, "(A,1X,F9.7)") "Exact:", test_func_exact_result
-  write (ERROR_UNIT, "(A,1X,F9.7,1X,A,1X,F9.7,1X,A)") "Error:", (test_func_exact_result - result), &
-       "=", abs (test_func_exact_result - result) / abserr, "sigma"
+  if (rank == 0) &
+       call print_result (2000, result, test_func_exact_result, abserr)
 
   call mc%final ()
   call rng%final ()
 
   call MPI_FINALIZE ()
+contains
+  subroutine print_result (n_calls, val, exact_val, err)
+    integer, intent(in) :: n_calls
+    real(default), intent(in) :: val, exact_val, err
+    write (ERROR_UNIT, "(A,1X,I0)") "Calls:", n_calls
+    write (ERROR_UNIT, "(A,1X,F9.7,1X,A,1X,F9.7)") "Result:", val, "±", err
+    write (ERROR_UNIT, "(A,1X,F9.7)") "Exact:", exact_val
+    write (ERROR_UNIT, "(A,1X,F9.7,1X,A,1X,F9.7,1X,A)") "Error:", (exact_val - val), &
+         "=", abs (exact_val - val) / err, "sigma"
+  end subroutine print_result
 end program main

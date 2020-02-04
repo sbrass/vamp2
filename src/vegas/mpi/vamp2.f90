@@ -12,6 +12,10 @@ module vamp2
 
   use vegas
 
+  !! BEGIN REMOVE
+  use logging
+  !! END REMOVE
+
   use request_callback
   use request_balancer
   use channel_balancer
@@ -148,9 +152,8 @@ module vamp2
      procedure, private :: apply_equivalences => vamp2_apply_equivalences
      procedure, public :: reset_result => vamp2_reset_result
      procedure, public :: integrate => vamp2_integrate
-     procedure, private :: init_caller => vamp2_init_caller
-     procedure, private :: init_balancer => vamp2_init_balancer
-     procedure, private :: integrate_init_iteration => vamp2_integrate_init_iteration
+     procedure, private :: export_weights_and_grids_to_func &
+          => vamp2_export_weights_and_grids_to_func
      procedure, public :: generate_weighted => vamp2_generate_weighted_event
      procedure, public :: generate_unweighted => vamp2_generate_unweighted_event
      procedure, public :: write_grids => vamp2_write_grids
@@ -183,6 +186,8 @@ module vamp2
      module procedure vamp2_init
   end interface vamp2_t
 
+
+  type(logging_t), private, save :: vamp2_log
 
 contains
 
@@ -494,11 +499,27 @@ contains
     do ch = 1, n_channel
        self%integrator(ch) = vegas_t (n_dim, alpha, n_bins_max, 1, mode)
     end do
-    self%weight = 1. / self%config%n_channel
+    self%weight = 1 / self%config%n_channel
     call self%reset_result ()
     allocate (self%event_weight(self%config%n_channel), source = 0._default)
     self%event_prepared = .false.
-    call self%caller%init (MPI_COMM_WORLD)
+    call init_caller ()
+    !! BEGIN REMOVE
+    call vamp2_log%init (string ("debug"))
+    !! END REMOVE
+  contains
+    subroutine init_caller ()
+      class(request_handler_t), pointer :: handler
+      integer :: ch
+      call self%caller%init (MPI_COMM_WORLD)
+      if (self%caller%is_master ()) then
+         !! Add callbacks of each channel integrator.
+         do ch = 1, self%config%n_channel
+            call self%integrator(ch)%allocate_handler (handler)
+            call self%caller%add_handler (ch, handler)
+         end do
+      end if
+    end subroutine init_caller
   end function vamp2_init
 
   subroutine vamp2_final (self)
@@ -723,152 +744,98 @@ contains
 
   subroutine vamp2_reset_result (self)
     class(vamp2_t), intent(inout) :: self
-    self%result%sum_int_wgtd = 0.
-    self%result%sum_wgts = 0.
-    self%result%sum_chi = 0.
-    self%result%it_num = 0
-    self%result%samples = 0
-    self%result%chi2 = 0
-    self%result%efficiency = 0.
+    call self%result%reset ()
   end subroutine vamp2_reset_result
 
-  subroutine vamp2_integrate (self, func, rng, iterations, opt_reset_result,&
-       & opt_refine_grid, opt_adapt_weight, opt_verbose, result, abserr)
+  subroutine vamp2_integrate (self, func, rng, iterations, reset_result,&
+       & refine_grids, adapt_weights, verbose, result, abserr)
     class(vamp2_t), intent(inout) :: self
     class(vamp2_func_t), intent(inout) :: func
     class(rng_t), intent(inout) :: rng
     integer, intent(in), optional :: iterations
-    logical, intent(in), optional :: opt_reset_result
-    logical, intent(in), optional :: opt_refine_grid
-    logical, intent(in), optional :: opt_adapt_weight
-    logical, intent(in), optional :: opt_verbose
+    logical, intent(in), optional :: reset_result
+    logical, intent(in), optional :: refine_grids
+    logical, intent(in), optional :: adapt_weights
+    logical, intent(in), optional :: verbose
     real(default), optional, intent(out) :: result, abserr
-    integer :: it, ch
-    real(default) :: total_integral, total_sq_integral, total_variance, chi, wgt
+    integer :: it, ch, current_channel
+    real(default) :: total_integral, total_variance
+    real(default) :: sum_abs_f_pos, sum_abs_f_neg, max_abs_f_pos, max_abs_f_neg
     real(default) :: cumulative_int, cumulative_std
-    logical :: reset_result = .true.
-    logical :: adapt_weight = .true.
-    logical :: refine_grid = .true.
-    logical :: verbose = .false.
+    logical :: opt_reset_result
+    logical :: opt_adapt_weights
+    logical :: opt_refine_grids
+    logical :: opt_verbose
+    !! BEGIN MPI
     type(request_t) :: request
-    class(request_handler_t), pointer :: handler
-    !!
-    integer :: rank
-    call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
-    !!
-    if (present (iterations)) self%config%iterations = iterations
-    if (present (opt_reset_result)) reset_result = opt_reset_result
-    if (present (opt_adapt_weight)) adapt_weight = opt_adapt_weight
-    if (present (opt_refine_grid)) refine_grid = opt_refine_grid
-    if (present (opt_verbose)) verbose = opt_verbose
-    if (verbose) then
+    !! END MPI
+    call set_options ()
+    if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
     cumulative_int = 0.
     cumulative_std = 0.
-    if (reset_result) call self%reset_result ()
+    if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
-       total_integral = 0._default
-       total_sq_integral = 0._default
-       total_variance = 0._default
-       call self%integrate_init_iteration ()
-       !! Move to integrate_init_iteration ...
-       do ch = 1, self%config%n_channel
-          func%wi(ch) = self%weight(ch)
-          func%grids(ch) = self%integrator(ch)%get_grid ()
-       end do
+       current_channel = 0
+       total_integral = 0
+       total_variance = 0
+       call self%export_weights_and_grids_to_func (func)
+       !! BEGIN MPI
+       call broadcast_weights_and_grids ()
+       call init_balancer ()
+       if (self%caller%is_master ()) &
+            call self%caller%handle_workload ()
+       !! END MPI
        ch = 1
        channel: do
+       ! channel: do ch = 1, self%config%n_channel
           !! BEGIN MPI
-          if (self%caller%is_master ()) then
-             write (ERROR_UNIT, "(A)") "[MASTER] handle workload"
-             call self%caller%handle_workload ()
+          if (self%caller%is_master ()) exit channel
+          !! Advance RNG for each skipped channel.
+          print *, "=======> REQUEST"
+          call request_channel (request)
+          if (request%terminate) then
+             call advance_rng (ch, self%config%n_channel, rng)
              exit channel
-          end if
-          call self%caller%request_workload (request)
-          print *, "RANK: ", rank, " | ", request
-          if (request%terminate) exit channel
-          if (ch > self%config%n_channel) exit channel !! NON-MPI
-          do while (request%handler_id > ch)
-             !! Advance RNG for each not-computed channel.
-             select type (rng)
-             type is (rng_stream_t)
-                call rng%next_substream ()
-             end select
-             ch = ch + 1
-          end do
-          if (request%group) then
-             print *, "RANK: ", rank, " | SET GROUP COMM."
-             call self%integrator(ch)%set_comm (request%comm)
           else
-             call self%integrator(ch)%set_comm (MPI_COMM_WORLD)
+             call advance_rng (ch, request%handler_id - 1, rng)
           end if
           !! END MPI
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
-               & func, rng, iterations, opt_refine_grid = .false., opt_verbose = verbose)
+               & func, rng, iterations, refine_grid = .false., verbose = verbose)
           !! BEGIN MPI
-          if (request%callback) then
-             call self%integrator(ch)%allocate_handler (handler)
-             call self%caller%add_handler (ch, handler)
-             print *, "RANK: ", rank, " | CALLBACK AND RELEASE REQUEST"
-             call self%caller%handler_and_release_workload (request)
-          else
-             print *, "RANK: ", rank, " | RELEASE REQUEST"
-             call self%caller%release_workload (request)
-          end if
+          print *, "=======> RELEASE"
+          call release_channel (request)
           !! END MPI
           ch = ch + 1
+          if (ch > self%config%n_channel) exit channel
        end do channel
-       print *, "WAITALL"
-       call self%caller%await_handler ()
-       ! call self%caller%handler_waitall ()
-       print *, "MPI_BARRIER"
+       ! call self%caller%await_handler ()
        call MPI_BARRIER (MPI_COMM_WORLD)
-       if (.not. self%caller%is_master ()) return
-       total_integral = dot_product (self%weight, self%integrator%get_integral ())
-       total_sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
-       total_variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
+       if (.not. self%caller%is_master ()) cycle
        associate (result => self%result)
-         ! a**2 - b**2 = (a - b) * (a + b)
-         total_variance = sqrt (total_variance + total_sq_integral)
-         total_variance = 1. / self%config%n_calls * &
-              & (total_variance + total_integral) * (total_variance - total_integral)
-         ! Ensure variance is always positive and larger than zero
-         if (total_variance < tiny (1._default) / epsilon (1._default) * max (total_integral**2, 1._default)) then
-            total_variance = tiny (1._default) / epsilon (1._default) * max (total_integral**2, 1._default)
-         end if
-         wgt = 1. / total_variance
-         result%result = total_integral
-         result%std = sqrt (total_variance)
-         result%samples = result%samples + 1
-         if (result%samples == 1) then
-            result%chi2 = 0._default
-         else
-            chi = total_integral
-            if (result%sum_wgts > 0) chi = chi - result%sum_int_wgtd / result%sum_wgts
-            result%chi2 = result%chi2 * (result%samples - 2.0_default)
-            result%chi2 = (wgt / (1._default + (wgt / result%sum_wgts))) &
-                 & * chi**2
-            result%chi2 = result%chi2 / (result%samples - 1._default)
-         end if
-         result%sum_wgts = result%sum_wgts + wgt
-         result%sum_int_wgtd = result%sum_int_wgtd + (total_integral * wgt)
-         result%sum_chi = result%sum_chi + (total_sq_integral * wgt)
+         call compute_integral_and_variance (total_integral, total_variance)
+         call result%update (total_integral, total_variance)
+         call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+              sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
+         call result%update_efficiency (n_calls  = 1, &
+              max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+              sum_pos = sum_abs_f_neg, sum_neg = sum_abs_f_neg)
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
-         cumulative_std = sqrt (1. / result%sum_wgts)
-         call calculate_efficiency ()
+         cumulative_std = sqrt (1 / result%sum_wgts)
          if (verbose) then
             write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                  & it, self%config%n_calls, cumulative_int, cumulative_std, &
-                 & self%result%chi2, self%result%efficiency
+                 & result%chi2, result%efficiency
             call msg_message ()
          end if
        end associate
-       if (adapt_weight) then
+       if (opt_adapt_weights) then
           call self%adapt_weights ()
        end if
-       if (refine_grid) then
+       if (opt_refine_grids) then
           if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
              call self%apply_equivalences ()
           end if
@@ -880,21 +847,110 @@ contains
     if (present (result)) result = cumulative_int
     if (present (abserr)) abserr = abs (cumulative_std)
   contains
-    subroutine calculate_efficiency ()
-      self%result%max_abs_f = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f ())
-      self%result%max_abs_f_pos = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f_pos ())
-      self%result%max_abs_f_neg = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f_neg ())
-      self%result%efficiency = 0.
-      if (self%result%max_abs_f > 0.) then
-         self%result%efficiency = &
-              & dot_product (self%weight * self%integrator%get_max_abs_f (), &
-              & self%integrator%get_efficiency ()) / self%result%max_abs_f
-         ! TODO pos. or. negative efficiency would be very nice.
-      end if
-    end subroutine calculate_efficiency
+    subroutine set_options ()
+      if (present (iterations)) self%config%iterations = iterations
+      opt_reset_result = .true.
+      if (present (reset_result)) opt_reset_result = reset_result
+      opt_adapt_weights = .true.
+      if (present (adapt_weights)) opt_adapt_weights = adapt_weights
+      opt_refine_grids = .true.
+      if (present (refine_grids)) opt_refine_grids = refine_grids
+      opt_verbose = .false.
+      if (present (verbose)) opt_verbose = verbose
+    end subroutine set_options
+
+    subroutine compute_integral_and_variance (integral, variance)
+      real(default), intent(out) :: integral, variance
+      real(default) :: sq_integral
+      integral = dot_product (self%weight, self%integrator%get_integral ())
+      sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
+      variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
+      variance = sqrt (variance + sq_integral)
+      variance = 1 / self%config%n_calls * &
+           & (total_variance + total_integral) * (total_variance - total_integral)
+    end subroutine compute_integral_and_variance
+
+    subroutine compute_efficiency (max_pos, max_neg, &
+      sum_pos, sum_neg)
+      real(default), intent(out) :: max_pos, max_neg
+      real(default), intent(out) :: sum_pos, sum_neg
+      max_abs_f_pos = maxval (self%integrator%get_max_abs_f_pos ())
+      max_abs_f_neg = maxval (self%integrator%get_max_abs_f_neg ())
+      sum_abs_f_pos = dot_product (self%weight, self%integrator%get_sum_abs_f_pos ())
+      sum_abs_f_neg = dot_product (self%weight, self%integrator%get_sum_abs_f_neg ())
+    end subroutine compute_efficiency
+
+    !! BEGIN MPI
+    !! Balancer must be initiated after each time adapt_weights/refine is called,
+    !! thus, we initialize the balancer for each iteration.
+    subroutine init_balancer ()
+      class(request_balancer_t), allocatable :: balancer
+      logical, dimension(:), allocatable :: parallel_grid
+      if (.not. self%caller%is_master ()) return
+      allocate (channel_balancer_t :: balancer)
+      parallel_grid = self%integrator%is_parallelizable () !! Allocate-on-assignment.
+      select type (balancer)
+      type is (channel_balancer_t)
+         call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
+         call balancer%add_parallel_grid (parallel_grid)
+         call balancer%add_channel_weight (self%weight)
+      end select
+      call self%caller%add_balancer (balancer)
+      call vamp2_log%append (string ("Add balancer..."))
+    end subroutine init_balancer
+
+    subroutine broadcast_weights_and_grids ()
+      type(vegas_grid_t) :: grid
+      integer :: size, ch
+      call MPI_COMM_SIZE (MPI_COMM_WORLD, size)
+      if (.not. size > 1) return
+      call MPI_BCAST (self%weight, self%config%n_channel, MPI_DOUBLE_PRECISION, 0,&
+           & MPI_COMM_WORLD)
+      do ch = 1, self%config%n_channel
+         grid = self%integrator(ch)%get_grid ()
+         call grid%broadcast (MPI_COMM_WORLD)
+         call self%integrator(ch)%set_grid (grid)
+      end do
+      call self%set_calls (self%config%n_calls)
+    end subroutine broadcast_weights_and_grids
+
+    subroutine request_channel (request)
+      type(request_t), intent(out) :: request
+      call self%caller%request_workload (request)
+      associate (channel => request%handler_id)
+        if (request%group) then
+           call self%integrator(channel)%set_comm (request%comm)
+        else
+           call self%integrator(channel)%set_comm (MPI_COMM_WORLD)
+        end if
+      end associate
+    end subroutine request_channel
+
+    subroutine advance_rng (ch, new_ch, rng)
+      class(rng_t), intent(inout) :: rng
+      integer, intent(in) :: ch, new_ch
+      integer :: i
+      do i = ch, new_ch
+         select type (rng)
+         type is (rng_stream_t)
+            call rng%next_substream ()
+         end select
+      end do
+    end subroutine advance_rng
+
+    subroutine release_channel (request)
+      type(request_t), intent(in) :: request
+      class(request_handler_t), pointer :: handler
+      associate (channel => request%handler_id)
+        if (request%callback) then
+           call self%integrator(channel)%allocate_handler (handler)
+           call self%caller%add_handler (ch, handler)
+           call self%caller%handler_and_release_workload (request)
+        else
+           call self%caller%release_workload (request)
+        end if
+      end associate
+    end subroutine release_channel
 
     subroutine vamp2_integrate_collect ()
       type(vegas_result_t) :: result
@@ -930,52 +986,16 @@ contains
 
   end subroutine vamp2_integrate
 
-  subroutine vamp2_init_caller (self)
-    class(vamp2_t), intent(inout), target :: self
-    class(request_handler_t), pointer :: handler
-    integer :: i_channel
-    call self%caller%init (MPI_COMM_WORLD)
-    if (self%caller%is_master ()) then
-       do i_channel = 1, self%config%n_channel
-          call self%integrator(i_channel)%allocate_handler (handler)
-          call self%caller%add_handler (i_channel, handler)
-       end do
-    end if
-  end subroutine vamp2_init_caller
-
-  subroutine vamp2_init_balancer (self)
-    class(vamp2_t), intent(inout), target :: self
-    class(request_balancer_t), allocatable :: balancer
-    logical, dimension(:), allocatable :: parallel_grid
-    allocate (channel_balancer_t :: balancer)
-    parallel_grid = self%integrator%is_parallelizable () !! Allocate-on-assignment.
-    select type (balancer)
-    type is (channel_balancer_t)
-       call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
-       call balancer%add_parallel_grid (parallel_grid)
-       call balancer%add_channel_weight (self%weight)
-       call balancer%write (ERROR_UNIT)
-    end select
-    call self%caller%add_balancer (balancer)
-  end subroutine vamp2_init_balancer
-
-  subroutine vamp2_integrate_init_iteration (self)
-    class(vamp2_t), intent(inout) :: self
-    type(vegas_grid_t) :: grid
-    type(MPI_REQUEST) :: request
+  subroutine vamp2_export_weights_and_grids_to_func (self, func)
+    class(vamp2_t), intent(in) :: self
+    class(vamp2_func_t), intent(inout) :: func
     integer :: ch
-    call MPI_IBCAST (self%weight, self%config%n_channel, MPI_DOUBLE_PRECISION, 0,&
-         & MPI_COMM_WORLD, request)
     do ch = 1, self%config%n_channel
-       grid = self%integrator(ch)%get_grid ()
-       call grid%broadcast (MPI_COMM_WORLD)
-       call self%integrator(ch)%set_grid (grid)
+       func%wi(ch) = self%weight(ch)
+       !! \todo Use pointers instead of a deep copy.
+       func%grids(ch) = self%integrator(ch)%get_grid ()
     end do
-    call MPI_Wait (request, MPI_STATUS_IGNORE)
-    if (self%caller%is_master ()) &
-         call self%init_balancer ()
-    call self%set_calls (self%config%n_calls)
-  end subroutine vamp2_integrate_init_iteration
+  end subroutine vamp2_export_weights_and_grids_to_func
 
   subroutine vamp2_generate_weighted_event (&
        self, func, rng, x)

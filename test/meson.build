@@ -46,6 +46,8 @@ iterator_1 = executable('iterator_1', 'iterator_1.f90',
                         link_with : utils)
 binary_tree_1 = executable('binary_tree_1', 'binary_tree_1.f90',
                            link_with : utils)
+logging_1 = executable('logging_1', 'logging_1.f90',
+                       link_with : utils)
 
 test('Request balancer initialization.', balancer_1)
 test('Request balancer add partition.', balancer_2)
@@ -75,4 +77,7 @@ vamp2_ut = executable('vamp2_ut', ['vamp2_ut.f90',
                                    signal,
                                    test_utils],
                       link_language : 'fortran')
+vamp2_mpi_ut = executable('vamp2_mpi_ut', 'vamp2_mpi_ut.f90',
+                          link_with : [utils, rng, vegas, load_balancer],
+                          link_language : 'fortran')
 test('VAMP2.', unit_test, args : [vamp2_ut, ref_vamp2])
