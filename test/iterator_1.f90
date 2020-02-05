@@ -18,4 +18,11 @@ program main
      write (ERROR_UNIT, "(A,1X,I3)") "NDX", iter%next ()
   end do
   write (ERROR_UNIT, "(A,1X,I3)") "INVALID NDX", iter%next ()
+
+  call iter%init (1, 10)
+  call iter%write (ERROR_UNIT)
+  do while (iter%is_iterable ())
+     call iter%next_step ()
+     write (ERROR_UNIT, "(A)") "STEP."
+  end do
 end program main

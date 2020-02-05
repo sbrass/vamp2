@@ -18,6 +18,8 @@ module iterator
      procedure :: at_end => iterator_at_end
      procedure :: is_iterable => iterator_is_iterable
      procedure :: next => iterator_next
+     procedure :: next_step => iterator_next_step
+     procedure :: get_current => iterator_get_current
   end type iterator_t
 
   public :: iterator_t
@@ -76,6 +78,14 @@ contains
     end if
   end function iterator_is_iterable
 
+  subroutine iterator_next_step (iter)
+    class(iterator_t), intent(inout) :: iter
+    if (.not. iter%is_iterable ()) return
+    iter%current = iter%current + iter%step
+  end subroutine iterator_next_step
+
+  !! Proof: begin ≤ current ≤ end.
+  !! However, after applying the step, this does not need to be true..
   function iterator_next (iter) result (ndx)
     class(iterator_t), intent(inout) :: iter
     integer :: ndx
@@ -86,5 +96,15 @@ contains
     ndx = iter%current
     iter%current = iter%current + iter%step
   end function iterator_next
+
+  pure function iterator_get_current (iter) result (ndx)
+    class(iterator_t), intent(in) :: iter
+    integer :: ndx
+    if (.not. iter%is_iterable ()) then
+       ndx = 0
+       return
+    end if
+    ndx = iter%current
+  end function iterator_get_current
 end module iterator
 
