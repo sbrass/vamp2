@@ -52,8 +52,16 @@ module request_callback
   !! Most important: Only a pointer to the buffer object is stored, therefore, the calling function
   !! has to ensure, that the communication object (buffer) will not be changed
   !! during a request handle (receive or send).
+  !!
+  !! Remark: The handler allows for a tag offset which allows to uniqify the the communication.
+  !!         The problem occurs when multiple callback need to handled simultanously and MPI needs to connect the communication calls accordingly.
+  !!         Each message has a tuple of (source, tag, comm) associated, we can uniquify this tuple by a unique tag.
+  !!         tag = tag_offset + {1, …, N_requests} where tag_offsets are multiple of N_requests.
+  !!         The latter condition should checked by a modulo.
+  !! What happens if the communication is out of order (is this a problem? check with standard)?
   type, abstract :: request_handler_t
      integer :: n_requests = 0
+     integer :: tag_offset = 0
      type(MPI_REQUEST), dimension(:), allocatable :: request
      type(MPI_STATUS), dimension(:), allocatable :: status
      logical :: finished = .false.
@@ -74,6 +82,7 @@ module request_callback
      procedure :: write => request_handler_manager_write
      procedure :: add => request_handler_manager_add
      procedure :: has_handler => request_handler_manager_has_handler
+     procedure :: test => request_handler_manager_test
      procedure :: wait => request_handler_manager_wait
      procedure :: waitall => request_handler_manager_waitall
      procedure, private :: handler_at => request_handler_manager_handler_at
@@ -125,18 +134,24 @@ contains
   !! \param[inout] handler Handler must be intent inout, as the calling function may already manipulated the extended object.
   !! \param[in] n_requests Number of MPI requests the objects needs to be able
   !! to handle.
-  subroutine request_handler_allocate (handler, n_requests)
+  subroutine request_handler_allocate (handler, n_requests, tag_offset)
     class(request_handler_t), intent(inout) :: handler
     integer, intent(in) :: n_requests
+    integer, intent(in) :: tag_offset
     allocate (handler%request(n_requests))
     allocate (handler%status(n_requests))
     handler%n_requests = n_requests
+    if (mod (tag_offset, n_requests) /= 0) &
+         call msg_bug ("Error during handler allocate, tag_offset is not a multiple of n_requests.")
+    !! What is the max.-allowed MPI_TAG?
+    handler%tag_offset = tag_offset
   end subroutine request_handler_allocate
 
   !> Call MPI_WATIALL and raise finished flag.
   subroutine request_handler_waitall (handler)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
+    if (handler%finished) return
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
        call msg_bug ("Request: Error occured during waitall on handler.")
@@ -155,6 +170,15 @@ contains
        end if
     end if
     flag = handler%finished
+  ! contains
+  !   subroutine print_status ()
+  !     integer :: i
+  !     do i = 1, handler%n_requests
+  !        associate (status => handler%status(i))
+  !          write (ERROR_UNIT, *) status%MPI_SOURCE, status%MPI_TAG, status%MPI_ERROR
+  !        end associate
+  !     end do
+  !   end subroutine print_status
   end function request_handler_testall
 
   !!
@@ -182,6 +206,14 @@ contains
     call rhm%tree%insert (handler_id, obj)
   end subroutine request_handler_manager_add
 
+  logical function request_handler_manager_test (rhm, handler_id) result (flag)
+    class(request_handler_manager_t), intent(inout) :: rhm
+    integer, intent(in) :: handler_id
+    class(request_handler_t), pointer :: handler
+    call rhm%handler_at (handler_id, handler)
+    flag = handler%testall ()
+  end function request_handler_manager_test
+
   subroutine request_handler_manager_wait (rhm, handler_id)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
@@ -194,11 +226,12 @@ contains
     class(request_handler_manager_t), intent(inout) :: rhm
     type(binary_tree_iterator_t) :: iterator
     integer :: handler_id
-    class(*), pointer :: obj
     call iterator%init (rhm%tree)
     do while (iterator%is_iterable ())
        call iterator%next (handler_id)
-       call rhm%wait (handler_id)
+       !! Test handler (destructive test on request handler).
+       if (.not. rhm%test (handler_id)) &
+            call rhm%wait (handler_id)
     end do
   end subroutine request_handler_manager_waitall
 
@@ -223,6 +256,11 @@ contains
     flag = rhm%tree%has_key (handler_id)
   end function request_handler_manager_has_handler
 
+  !> Call server-sided procedure of callback with handler_id.
+  !!
+  !! \param[in] handler_id
+  !! \param[in] source
+  !! \param[in] comm Communicator, must match with the corresponding communicator from the client-sided procedure.
   subroutine request_handler_manager_callback (rhm, handler_id, source, comm)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
@@ -234,6 +272,11 @@ contains
     call handler%handle (source = source, tag = handler_id, comm = comm)
   end subroutine request_handler_manager_callback
 
+  !> Call client-sided procedure of callback with handler_id.
+  !!
+  !! \param[in] handler_id
+  !! \param[in] source Destination rank.
+  !! \param[in] comm Communicator (must match between client and server-side procedure).
   subroutine request_handler_manager_client_callback (rhm, handler_id, source, comm)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id

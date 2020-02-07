@@ -29,13 +29,14 @@ module result_handler
 
   public :: result_t, result_handler_t
 contains
-  subroutine result_handler_init (handler, result, n_requests)
+  subroutine result_handler_init (handler, result, n_requests, channel)
     class(result_handler_t), intent(inout) :: handler
     type(result_t), intent(in), target :: result
     integer, intent(in) :: n_requests
+    integer, intent(in) :: channel
     handler%obj => result
     handler%finished = .false.
-    call handler%allocate (n_requests)
+    call handler%allocate (n_requests, tag_offset = channel * n_requests)
   end subroutine result_handler_init
 
   subroutine result_handler_handle (handler, source, tag, comm)
@@ -43,7 +44,7 @@ contains
     integer, intent(in) :: source
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    call handler%obj%receive (source, comm, handler%request)
+    call handler%obj%receive (source, handler%tag_offset, comm, handler%request)
     handler%finished = .false.
   end subroutine result_handler_handle
 
@@ -52,7 +53,7 @@ contains
     integer, intent(in) :: rank
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    call handler%obj%send (rank, comm, handler%request)
+    call handler%obj%send (rank, handler%tag_offset, comm, handler%request)
     handler%finished = .false.
   end subroutine result_handler_client_handle
 
@@ -65,30 +66,34 @@ contains
   end subroutine result_handler_final
 
   !> Asymmetric send and receive.
-  subroutine result_send (result, receiver, comm, reqs)
+  subroutine result_send (result, receiver, tag_offset, comm, reqs)
     class(result_t), intent(in) :: result
     integer, intent(in) :: receiver
+    integer, intent(in) :: tag_offset
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(3), intent(inout) :: reqs
+    write (ERROR_UNIT, "(A,1X,I0)") "TAG_OFFSET", tag_offset
     call MPI_ISEND (result%samples, 1, MPI_INTEGER, &
-         receiver, 1, comm, reqs(1))
+         receiver, tag_offset + 1, comm, reqs(1))
     call MPI_ISEND (result%sum_integral, 1, MPI_DOUBLE_PRECISION, &
-         receiver, 1, comm, reqs(2))
+         receiver, tag_offset + 1, comm, reqs(2))
     call MPI_ISEND (result%sum_integral_sq, 1, MPI_DOUBLE_PRECISION, &
-         receiver, 2, comm, reqs(3))
+         receiver, tag_offset + 2, comm, reqs(3))
   end subroutine result_send
 
-  subroutine result_receive (result, source, comm, reqs)
+  subroutine result_receive (result, source, tag_offset, comm, reqs)
     class(result_t), intent(inout) :: result
     integer, intent(in) :: source
+    integer, intent(in) :: tag_offset
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(3), intent(inout) :: reqs
+    write (ERROR_UNIT, "(A,1X,I0)") "TAG_OFFSET", tag_offset
     call MPI_IRECV (result%samples, 1, MPI_INTEGER, &
-         source, 1, comm, reqs(1))
+         source, tag_offset + 1, comm, reqs(1))
     call MPI_IRECV (result%sum_integral, 1, MPI_DOUBLE_PRECISION, &
-         source, 1, comm, reqs(2))
+         source, tag_offset + 1, comm, reqs(2))
     call MPI_IRECV (result%sum_integral_sq, 1, MPI_DOUBLE_PRECISION, &
-         source, 2, comm, reqs(3))
+         source, tag_offset + 2, comm, reqs(3))
   end subroutine result_receive
 
   integer function result_get_n_requests (result) result (n_requests)
