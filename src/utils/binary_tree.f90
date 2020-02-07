@@ -60,17 +60,18 @@ contains
     allocate (iterator%key(btree%get_n_elements ()), source = 0)
     if (.not. btree%get_n_elements () > 0) return
     idx = 1; call fill_key (idx, iterator%key, btree%root)
+    write (ERROR_UNIT, *) iterator%key
   contains
     recursive subroutine fill_key (idx, key, node)
       integer, intent(inout) :: idx
       integer, dimension(:), intent(inout) :: key
       type(binary_tree_node_t), pointer :: node
       if (associated (node%left)) &
-         call fill_key (idx, key, node%left)
-      if (associated (node%right)) &
-         call fill_key (idx, key, node%right)
+           call fill_key (idx, key, node%left)
       key(idx) = node%key
       idx = idx + 1
+      if (associated (node%right)) &
+           call fill_key (idx, key, node%right)
     end subroutine fill_key
   end subroutine binary_tree_iterator_init
 
