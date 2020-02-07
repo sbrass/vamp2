@@ -60,7 +60,6 @@ contains
     allocate (iterator%key(btree%get_n_elements ()), source = 0)
     if (.not. btree%get_n_elements () > 0) return
     idx = 1; call fill_key (idx, iterator%key, btree%root)
-    write (ERROR_UNIT, *) iterator%key
   contains
     recursive subroutine fill_key (idx, key, node)
       integer, intent(inout) :: idx

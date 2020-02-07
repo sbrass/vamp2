@@ -72,7 +72,6 @@ contains
     integer, intent(in) :: tag_offset
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(3), intent(inout) :: reqs
-    write (ERROR_UNIT, "(A,1X,I0)") "TAG_OFFSET", tag_offset
     call MPI_ISEND (result%samples, 1, MPI_INTEGER, &
          receiver, tag_offset + 1, comm, reqs(1))
     call MPI_ISEND (result%sum_integral, 1, MPI_DOUBLE_PRECISION, &
@@ -87,7 +86,6 @@ contains
     integer, intent(in) :: tag_offset
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(3), intent(inout) :: reqs
-    write (ERROR_UNIT, "(A,1X,I0)") "TAG_OFFSET", tag_offset
     call MPI_IRECV (result%samples, 1, MPI_INTEGER, &
          source, tag_offset + 1, comm, reqs(1))
     call MPI_IRECV (result%sum_integral, 1, MPI_DOUBLE_PRECISION, &
