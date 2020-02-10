@@ -76,6 +76,7 @@ module request_callback
 
   type :: request_handler_manager_t
      private
+     type(MPI_COMM) :: comm
      type(binary_tree_t) :: tree
    contains
      procedure :: init => request_handler_manager_init
@@ -184,9 +185,9 @@ contains
   !!
   !! Request handler manager.
   !!
-  subroutine request_handler_manager_init (rhm)
+  subroutine request_handler_manager_init (rhm, comm)
     class(request_handler_manager_t), intent(out) :: rhm
-    !! Do something.
+    call MPI_COMM_DUP (comm, rhm%comm)
   end subroutine request_handler_manager_init
 
   subroutine request_handler_manager_write (rhm, unit)
