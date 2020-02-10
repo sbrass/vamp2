@@ -82,6 +82,7 @@ module request_callback
      procedure :: init => request_handler_manager_init
      procedure :: write => request_handler_manager_write
      procedure :: add => request_handler_manager_add
+     procedure :: clear => request_handler_manager_clear
      procedure :: has_handler => request_handler_manager_has_handler
      procedure :: test => request_handler_manager_test
      procedure :: wait => request_handler_manager_wait
@@ -208,6 +209,11 @@ contains
     obj => handler
     call rhm%tree%insert (handler_id, obj)
   end subroutine request_handler_manager_add
+
+  subroutine request_handler_manager_clear (rhm)
+    class(request_handler_manager_t), intent(inout) :: rhm
+    call rhm%tree%clear ()
+  end subroutine request_handler_manager_clear
 
   logical function request_handler_manager_test (rhm, handler_id) result (flag)
     class(request_handler_manager_t), intent(inout) :: rhm

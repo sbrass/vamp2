@@ -41,6 +41,17 @@ program main
   end do
   call btree%write (ERROR_UNIT)
 
+  write (ERROR_UNIT, "(A)") "* Clear binary tree..."
+  call btree%clear ()
+  call btree%write (ERROR_UNIT)
+
+  write (ERROR_UNIT, "(A)") "* Insert fixed number of object into tree (reversed order)..."
+  do i = size (ndx), 1, -1
+     print *, i
+     call allocate_obj (i, obj)
+     call btree%insert (ndx(i), obj)
+  end do
+
   write (ERROR_UNIT, "(A)") "* Iterate over binary tree..."
   call iterator%init (btree)
   do while (iterator%is_iterable ())

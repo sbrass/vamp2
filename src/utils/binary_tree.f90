@@ -27,7 +27,7 @@ module binary_tree
      procedure :: write => binary_tree_node_write
      procedure :: get_balance => binary_tree_node_get_balance
      procedure :: increment_height => binary_tree_node_increment_height
-     procedure :: final => binary_tree_node_final
+     final :: binary_tree_node_final
   end type binary_tree_node_t
 
   type :: binary_tree_t
@@ -43,6 +43,7 @@ module binary_tree
      procedure :: has_key => binary_tree_has_key
      procedure, private :: rotate_left => binary_tree_rotate_left
      procedure, private :: rotate_right => binary_tree_rotate_right
+     procedure :: clear => binary_tree_clear
      final :: binary_tree_final
   end type binary_tree_t
 
@@ -102,22 +103,23 @@ contains
     btree_node%obj => obj
   end subroutine binary_tree_node_init
 
-  recursive subroutine binary_tree_node_write (btree_node, unit, level)
+  recursive subroutine binary_tree_node_write (btree_node, unit, level, mode)
     class(binary_tree_node_t), intent(in) :: btree_node
     integer, intent(in) :: unit
     integer, intent(in) :: level
-    character(len=18) :: fmt
+    character(len=*), intent(in) :: mode
+    character(len=24) :: fmt
     if (level > 0) then
-       write (fmt, "(A,I3,A)") "(", 3 * level, "X,I3,1X,I3)"
+       write (fmt, "(A,I3,A)") "(", 3 * level, "X,A,1X,I3,1X,I3,A)"
     else
-       fmt = "(I3,1X,I3)"
+       fmt = "(A,1X,I3,1X,I3,1X)"
     end if
-    write (unit, fmt) btree_node%key, btree_node%height
+    write (unit, fmt) mode, btree_node%key, btree_node%height
     ! write (unit, fmt) btree_node%key, btree_node%get_balance ()
     if (associated (btree_node%right)) &
-         call btree_node%right%write (unit, level = level + 1)
+         call btree_node%right%write (unit, level = level + 1, mode = "R")
     if (associated (btree_node%left)) &
-         call btree_node%left%write (unit, level = level + 1)
+         call btree_node%left%write (unit, level = level + 1, mode = "L")
   end subroutine binary_tree_node_write
 
   integer function binary_tree_node_get_balance (btree_node) result (balance)
@@ -141,16 +143,10 @@ contains
   end subroutine binary_tree_node_increment_height
 
   recursive subroutine binary_tree_node_final (btree_node)
-    class(binary_tree_node_t), intent(inout) :: btree_node
-    if (associated (btree_node%left)) then
-       call btree_node%left%final ()
-       deallocate (btree_node%left)
-    end if
-    if (associated (btree_node%right)) then
-       call btree_node%right%final ()
-       deallocate (btree_node%right)
-    end if
-    nullify (btree_node%obj)
+    type(binary_tree_node_t), intent(inout) :: btree_node
+    if (associated (btree_node%left)) deallocate (btree_node%left)
+    if (associated (btree_node%right)) deallocate (btree_node%right)
+    deallocate (btree_node%obj)
   end subroutine binary_tree_node_final
 
   subroutine binary_tree_write (btree, unit)
@@ -160,7 +156,7 @@ contains
     u = ERROR_UNIT; if (present (unit)) u = unit
     write (u, "(A,1X,I3)") "Number of elements", btree%n_elements
     if (associated (btree%root)) then
-       call btree%root%write (unit, level = 0)
+       call btree%root%write (u, level = 0, mode = "*")
     else
        write (u, "(A)") "Binary tree is empty."
     end if
@@ -168,10 +164,17 @@ contains
 
   subroutine binary_tree_final (btree)
     type(binary_tree_t), intent(inout) :: btree
+    btree%n_elements = 0
     if (associated (btree%root)) then
-       call btree%root%final ()
+       ! call btree%root%final ()
+       deallocate (btree%root)
     end if
   end subroutine binary_tree_final
+
+  subroutine binary_tree_clear (btree)
+    class(binary_tree_t), intent(inout) :: btree
+    call binary_tree_final (btree)
+  end subroutine binary_tree_clear
 
   integer function binary_tree_get_n_elements (btree) result (n)
     class(binary_tree_t), intent(in) :: btree
