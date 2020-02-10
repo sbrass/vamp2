@@ -27,9 +27,10 @@ program main
   type(iterator_t) :: channel_iter
   integer :: current_channel
   class(rng_t), allocatable :: rng
-  !! MPI
+#ifdef MPI
   type(request_t) :: request
   class(request_base_t), allocatable :: req
+#endif
 
 #ifdef MPI
   call MPI_INIT ()
@@ -39,39 +40,24 @@ program main
   parallel_grid(7) = .true.
   parallel_grid(8) = .true.
 
+#ifdef MPI
   allocate (request_simple_t :: req)
   select type (req)
   type is (request_simple_t)
      call req%init (MPI_COMM_WORLD, n_channels, parallel_grid)
   end select
+#endif
 
+  allocate (rng_stream_t :: rng)
+  call rng%init ()
+
+#ifdef MPI
   if (commandline_is_gdb_attach ()) then
      if (req%is_master ()) call signal_print_pid_and_wait ()
      call MPI_BARRIER (MPI_COMM_WORLD)
   end if
 
-  allocate (rng_stream_t :: rng)
-  call rng%init ()
-
-  !! TODO
-  !! [X] Add all handlers on master and call callback.
-  !! [ ] Add handler to group_master only.
-
-#ifdef MPI
-  !! The master worker needs always all handler (callback objects) in order to perform the communication to the client handler (callbacks).
-  if (req%is_master ()) then
-     call channel_iter%init (1, n_channels, 1)
-     do while (channel_iter%is_iterable ())
-        current_channel = channel_iter%get_current ()
-        call allocate_handler (req, current_channel, result(current_channel))
-        select type (req)
-        type is (request_simple_t)
-           call req%call_handler (current_channel, &
-                req%map_channel_to_worker(current_channel))
-        end select
-        call channel_iter%next_step ()
-     end do
-  end if
+  call init_all_handler (req)
 #endif
 
   call channel_iter%init (1, n_channels, 1)
@@ -89,6 +75,7 @@ program main
 #ifdef MPI
      !! Callback handler on master already registered.
      if (request%group_master) then
+        !! Veto handler allocation on master (is already allocated).
         if (.not. req%is_master ()) &
              call allocate_handler (req, current_channel, result(current_channel))
         call req%handle_and_release_workload (request)
@@ -102,8 +89,23 @@ program main
   call req%await_handler ()
 
   call MPI_FINALIZE ()
-#endif
 contains
+  subroutine init_all_handler (req)
+    class(request_base_t), intent(inout) :: req
+    integer :: ch, worker
+    !! The master worker needs always all handler (callback objects)
+    !! in order to perform the communication to the client handler (callbacks).
+    if (.not. req%is_master ()) return
+    do ch = 1, n_channels
+       call allocate_handler (req, ch, result(ch))
+       select type (req)
+       type is (request_simple_t)
+          worker = req%map_channel_to_worker(current_channel)
+       end select
+       call req%call_handler (ch, worker)
+    end do
+  end subroutine init_all_handler
+
   subroutine allocate_handler (req, handler_id, result)
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
@@ -112,6 +114,8 @@ contains
     allocate (result_handler_t :: handler)
     select type (handler)
     type is (result_handler_t)
+       !! The handler interface can be anything suiting.
+       !! However, the init procedure must call the allocate procedure internally.
        call handler%init (result, result%get_n_requests (), handler_id)
     end select
     call req%add_handler (handler_id, handler)
@@ -141,4 +145,5 @@ contains
        call iter%next_step ()
     end do advance
   end subroutine advance_rng
+#endif
 end program main
