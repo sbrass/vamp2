@@ -117,9 +117,9 @@ contains
     write (unit, fmt) mode, btree_node%key, btree_node%height
     ! write (unit, fmt) btree_node%key, btree_node%get_balance ()
     if (associated (btree_node%right)) &
-         call btree_node%right%write (unit, level = level + 1, mode = "R")
+         call btree_node%right%write (unit, level = level + 1, mode = ">")
     if (associated (btree_node%left)) &
-         call btree_node%left%write (unit, level = level + 1, mode = "L")
+         call btree_node%left%write (unit, level = level + 1, mode = "<")
   end subroutine binary_tree_node_write
 
   integer function binary_tree_node_get_balance (btree_node) result (balance)
