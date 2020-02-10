@@ -668,17 +668,19 @@ contains
     n_requests = 14
   end function vegas_result_get_n_requests
 
-  subroutine vegas_handler_init (handler, result, d)
+  subroutine vegas_handler_init (handler, handler_id, result, d)
     class(vegas_handler_t), intent(inout) :: handler
+    integer, intent(in) :: handler_id
     type(vegas_result_t), intent(in), target :: result
     real(default), dimension(:, :), intent(in), target :: d
-    integer :: n_requests
+    integer :: n_requests, tag_offset
     handler%result => result
     handler%d => d
     handler%finished = .false.
     !! Add one request for handling of the distribution d.
     n_requests = result%get_n_requests () + 1
-    call handler%allocate (n_requests)
+    tag_offset = handler_id * n_requests
+    call handler%allocate (n_requests, tag_offset)
   end subroutine vegas_handler_init
 
   subroutine vegas_handler_handle (handler, source, tag, comm)
@@ -945,13 +947,14 @@ contains
     evt_weight_excess = self%result%evt_weight_excess
   end function vegas_get_evt_weight_excess
 
-  subroutine vegas_allocate_handler (self, handler)
+  subroutine vegas_allocate_handler (self, handler_id, handler)
     class(vegas_t), intent(in), target :: self
+    integer, intent(in) :: handler_id
     class(request_handler_t), pointer, intent(out) :: handler
     allocate (vegas_handler_t :: handler)
     select type (handler)
     type is (vegas_handler_t)
-       call handler%init (result = self%result, d = self%d)
+       call handler%init (handler_id, result = self%result, d = self%d)
     end select
   end subroutine vegas_allocate_handler
 

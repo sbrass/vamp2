@@ -20,8 +20,8 @@ module logging
      final :: logging_final
   end type logging_t
 
+  character(len=256),  public, save :: LOG_BUFFER = ""
   public :: string
-
   public :: logging_t
 contains
 

@@ -113,7 +113,7 @@ contains
     allocate (resource_weight(balancer%get_n_resources ()), source = 0._default)
     if (balancer%get_n_resources () >= balancer%get_n_workers ()) then
        !! Apply full multi-channel parallelization.
-       call msg_message ("Balancer: Apply full multi-channel parallelization")
+       ! call msg_message ("Balancer: Apply full multi-channel parallelization")
        balancer%n_parallel_grids = 0
        balancer%n_parallel_channels = balancer%get_n_resources ()
        balancer%parallel_grid = .false.
@@ -125,14 +125,14 @@ contains
        if (count (balancer%parallel_grid) == balancer%get_n_resources ()) then
           !! Apply full VEGAS parallelization.
           balancer%n_parallel_grids = balancer%get_n_resources ()
-          call msg_message ("Balancer: Apply full VEGAS parallelization")
+          ! call msg_message ("Balancer: Apply full VEGAS parallelization")
           balancer%n_parallel_channels = 0
           balancer%n_grid_workers = balancer%get_n_workers ()
           balancer%n_channel_workers = 0
           resource_weight = weight
           call balancer%add_resource_weight (resource_weight)
        else
-          call msg_message ("Balancer: Apply mixed parallelization")
+          ! call msg_message ("Balancer: Apply mixed parallelization")
           balancer%n_parallel_grids = count (balancer%parallel_grid)
           balancer%n_parallel_channels = balancer%get_n_resources () - balancer%n_parallel_grids
           call balancer%compute_mixed_resource_weight (weight)
@@ -150,7 +150,7 @@ contains
     subroutine apply_partition ()
       type(partition_t), dimension(:), allocatable :: partition
       integer, dimension(:), allocatable :: map_channel_to_partition
-      call msg_message ("Allocate channel/grid partitions.")
+      ! call msg_message ("Allocate channel/grid partitions.")
       allocate (partition(N_CHANNEL_BALANCER_PARTITIONS))
       call partition(CHANNEL_PARTITION)%init ("Channel partition", PARTITION_SINGLE, balancer%n_channel_workers)
       call partition(GRID_PARTITION)%init ("Grid partition", PARTITION_ALL, balancer%n_grid_workers)

@@ -16,6 +16,7 @@ module vamp2
   use logging
   !! END REMOVE
 
+  use request_base, only: request_t
   use request_callback
   use request_balancer
   use channel_balancer
@@ -515,7 +516,7 @@ contains
       if (self%caller%is_master ()) then
          !! Add callbacks of each channel integrator.
          do ch = 1, self%config%n_channel
-            call self%integrator(ch)%allocate_handler (handler)
+            call self%integrator(ch)%allocate_handler (handler_id = ch, handler = handler)
             call self%caller%add_handler (ch, handler)
          end do
       end if
@@ -791,6 +792,8 @@ contains
        channel: do
        ! channel: do ch = 1, self%config%n_channel
           !! BEGIN MPI
+          write (LOG_BUFFER, "(A,1X,I0)") "CHANNEL", ch
+          call vamp2_log%append (string (LOG_BUFFER))
           if (self%caller%is_master ()) exit channel
           !! Advance RNG for each skipped channel.
           print *, "=======> REQUEST"
@@ -943,9 +946,11 @@ contains
       class(request_handler_t), pointer :: handler
       associate (channel => request%handler_id)
         if (request%callback) then
-           call self%integrator(channel)%allocate_handler (handler)
+           call self%integrator(channel)%allocate_handler ( &
+                handler_id = request%handler_id, &
+                handler = handler)
            call self%caller%add_handler (ch, handler)
-           call self%caller%handler_and_release_workload (request)
+           call self%caller%handle_and_release_workload (request)
         else
            call self%caller%release_workload (request)
         end if

@@ -8,8 +8,6 @@ program main
 
   type (logging_t) :: file, unit
 
-  character(len=256) :: buffer
-
   integer :: comm_size
 
   call MPI_INIT ()
@@ -17,10 +15,10 @@ program main
   call file%init (filename = string ("logging_1"))
 
   call MPI_COMM_SIZE (MPI_COMM_WORLD, comm_size)
-  write (buffer, "(A,1X,I0)") "Communicator size:", comm_size
+  write (LOG_BUFFER, "(A,1X,I0)") "Communicator size:", comm_size
 
-  call file%append (string (buffer))
-  call file%append (string (buffer))
+  call file%append (string (LOG_BUFFER))
+  call file%append (string (LOG_BUFFER))
   call file%clear ()
   call file%flush ()
 

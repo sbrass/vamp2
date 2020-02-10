@@ -3,6 +3,7 @@ program main
   use iso_fortran_env, only: ERROR_UNIT, &
        r64 => REAL64
 
+  use request_base, only: request_t
   use request_caller
   use request_balancer
   use request_callback, only: request_handler_t
@@ -45,7 +46,7 @@ program main
         if (request_rank == 0) then
            !! Provide callback for result.
            call add_handler (caller, request%handler_id, result(request%handler_id))
-           call caller%handler_and_release_workload (request)
+           call caller%handle_and_release_workload (request)
         else
            call caller%release_workload (request)
         end if
@@ -69,7 +70,7 @@ contains
     allocate (result_handler_t :: handler)
     select type (handler)
     type is (result_handler_t)
-       call handler%init (result, result%get_n_requests ())
+       call handler%init (result, result%get_n_requests (), handler_id)
     end select
     call caller%add_handler (handler_id, handler)
   end subroutine add_handler

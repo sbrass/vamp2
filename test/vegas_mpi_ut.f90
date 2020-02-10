@@ -69,7 +69,7 @@ program main
        call print_result (10000, result, test_func_exact_result, abserr)
 
   call mc%set_calls (2000)
-  call mc%integrate (func, rng, 3, opt_refine_grid = .false., result=result, abserr=abserr)
+  call mc%integrate (func, rng, 3, refine_grid = .false., result=result, abserr=abserr)
   if (rank == 0) &
        call print_result (2000, result, test_func_exact_result, abserr)
 

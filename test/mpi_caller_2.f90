@@ -2,6 +2,7 @@
 program main
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
 
+  use request_base, only: request_t
   use request_caller
   use request_balancer
 

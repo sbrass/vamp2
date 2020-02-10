@@ -384,7 +384,7 @@ contains
     write (u, "(A)") "* Integrate with n_it = 3 (Adaptation)"
     write (u, "(A)")
 
-    call mc_integrator%integrate (func, rng, 3, opt_verbose=.true., result=result, abserr=abserr)
+    call mc_integrator%integrate (func, rng, 3, verbose=.true., result=result, abserr=abserr)
     call mc_integrator%get_config (mc_integrator_config)
     call mc_integrator_config%write (u)
     write (u, "(2x,A," // FMT_12 // ",A," // FMT_12 // ")") &
@@ -395,7 +395,7 @@ contains
     write (u, "(A)")
 
     call mc_integrator%set_calls (2000)
-    call mc_integrator%integrate (func, rng, 3, opt_verbose=.true., result=result, abserr=abserr)
+    call mc_integrator%integrate (func, rng, 3, verbose=.true., result=result, abserr=abserr)
     call mc_integrator%get_config (mc_integrator_config)
     call mc_integrator_config%write (u)
     write (u, "(2x,A," // FMT_12 // ",A," // FMT_12 // ")") &

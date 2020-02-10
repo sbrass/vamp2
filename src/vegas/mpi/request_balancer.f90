@@ -172,7 +172,7 @@ contains
     integer, dimension(:), allocatable :: map_resource_to_partition
     opt_skip_partition = .false.; if (present(skip_partition)) opt_skip_partition = skip_partition
     if (opt_skip_partition) then
-       call msg_message ("Balancer: Allocation of partition post-poned")
+       ! call msg_message ("Balancer: Allocation of partition post-poned")
        return
     end if
     call msg_message ("Balancer: Allocate single partition")

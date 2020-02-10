@@ -245,7 +245,7 @@ contains
     write (u, "(A)") "* Integrate with n_it = 3 and n_calls = 10000 (Adaptation)"
     write (u, "(A)")
 
-    call mc_integrator%integrate (func, rng, 3, opt_verbose = .true., result=result, abserr=abserr)
+    call mc_integrator%integrate (func, rng, 3, verbose = .true., result=result, abserr=abserr)
     write (u,  "(2x,A," // FMT_12 // ",A," // FMT_12 // ")") "Result: ", result, " +/- ", abserr
 
     write (u, "(A)")
@@ -253,7 +253,7 @@ contains
     write (u, "(A)")
 
     call mc_integrator%set_calls (200)
-    call mc_integrator%integrate (func, rng, 3, opt_verbose = .true., result=result, abserr=abserr)
+    call mc_integrator%integrate (func, rng, 3, verbose = .true., result=result, abserr=abserr)
     write (u,  "(2x,A," // FMT_12 // ",A," // FMT_12 // ")") "Result: ", result, " +/- ", abserr
 
     write (u, "(A)")
@@ -499,7 +499,7 @@ contains
     write (u, "(A)")
 
     call mc_integrator%integrate (func, rng, 3, &
-         opt_adapt_weight = .false., result=result, abserr=abserr)
+         adapt_weights = .false., result=result, abserr=abserr)
     if (nearly_equal &
          (result, 2.000_default, rel_smallness = 0.003_default)) then
        write (u,  "(2x,A)") "Result: 2.000 [ok]"
@@ -532,8 +532,8 @@ contains
     write (u, "(A)")
 
     call mc_integrator%set_calls (5000)
-    call mc_integrator%integrate (func, rng, 3, opt_adapt_weight = .false., &
-         opt_refine_grid = .false., result=result, abserr=abserr)
+    call mc_integrator%integrate (func, rng, 3, adapt_weights = .false., &
+         refine_grids = .false., result=result, abserr=abserr)
     if (nearly_equal &
          (result, 2.000_default, rel_smallness = 0.002_default)) then
        write (u,  "(2x,A)") "Result: 2.000 [ok]"
