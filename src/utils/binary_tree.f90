@@ -251,8 +251,8 @@ contains
        if (subtree%left%key > key) then !! rotate right
           call btree%rotate_right (node, newNode)
        else !! subtree%left%key < key, rotate left, then right.
-          call btree%rotate_left (node, newNode)
-          node => newNode
+          call btree%rotate_left (node%left, newNode)
+          node%left => newNode
           call btree%rotate_right (node, newNode)
        end if
     else if (balance < -1) then
@@ -271,8 +271,8 @@ contains
        if (subtree%right%key < key) then !! rotate left
           call btree%rotate_left (node, newNode)
        else !! subtree%right%key > key, rotate right, then left.
-          call btree%rotate_right (node, newNode)
-          node => newNode
+          call btree%rotate_right (node%right, newNode)
+          node%right => newNode
           call btree%rotate_left (node, newNode)
        end if
     end if
