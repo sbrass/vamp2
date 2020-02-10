@@ -89,3 +89,5 @@ vamp2_mpi_ut = executable('vamp2_mpi_ut', 'vamp2_mpi_ut.f90',
                           link_with : [utils, rng, vegas, load_balancer],
                           link_language : 'fortran')
 test('VAMP2.', unit_test, args : [vamp2_ut, ref_vamp2])
+
+mpi_comm_dup = executable('mpi_comm_dup', 'mpi_comm_dup.f90')
