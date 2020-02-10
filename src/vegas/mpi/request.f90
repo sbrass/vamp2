@@ -164,7 +164,6 @@ contains
     comm = cache%comm
   end subroutine request_group_cache_get_comm
 
-
   logical function request_group_cache_is_master (cache) result (flag)
     class(request_group_cache_t), intent(in) :: cache
     integer :: rank, error
@@ -225,7 +224,7 @@ contains
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
     integer, intent(in) :: source
-    call req%handler%callback (handler_id, source, req%comm)
+    call req%handler%callback (handler_id, source)
   end subroutine request_base_call_handler
 
   !> Call handler for slave communication for handler_id.
@@ -234,7 +233,7 @@ contains
   subroutine request_base_call_client_handler (req, handler_id)
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
-    call req%handler%client_callback (handler_id, 0, req%comm)
+    call req%handler%client_callback (handler_id, 0)
   end subroutine request_base_call_client_handler
 
   subroutine request_base_await_handler (req)

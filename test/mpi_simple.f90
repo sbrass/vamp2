@@ -18,6 +18,8 @@ program main
 
   use iterator
 
+  use diagnostics
+
   implicit none
 
   integer, parameter :: n_channels = 13
@@ -96,13 +98,16 @@ contains
     !! The master worker needs always all handler (callback objects)
     !! in order to perform the communication to the client handler (callbacks).
     if (.not. req%is_master ()) return
+    call msg_message ("INIT ALL HANDLER (MASTER)")
     do ch = 1, n_channels
        call allocate_handler (req, ch, result(ch))
        select type (req)
        type is (request_simple_t)
-          worker = req%map_channel_to_worker(current_channel)
+          worker = req%get_request_master (ch)
+          call req%call_handler (ch, worker)
+       class default
+          call msg_bug ("Unknown request_t extension.")
        end select
-       call req%call_handler (ch, worker)
     end do
   end subroutine init_all_handler
 

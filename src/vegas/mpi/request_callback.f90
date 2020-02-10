@@ -166,20 +166,21 @@ contains
     if (.not. handler%finished) then
        call MPI_TESTALL (handler%n_requests, handler%request, handler%finished, &
             handler%status, error)
+       ! call print_status ()
        if (error /= 0) then
           call msg_bug ("Request: Error occured during testall on handler.")
        end if
     end if
     flag = handler%finished
-  ! contains
-  !   subroutine print_status ()
-  !     integer :: i
-  !     do i = 1, handler%n_requests
-  !        associate (status => handler%status(i))
-  !          write (ERROR_UNIT, *) status%MPI_SOURCE, status%MPI_TAG, status%MPI_ERROR
-  !        end associate
-  !     end do
-  !   end subroutine print_status
+  contains
+    subroutine print_status ()
+      integer :: i
+      do i = 1, handler%n_requests
+         associate (status => handler%status(i))
+           write (ERROR_UNIT, *) status%MPI_SOURCE, status%MPI_TAG, status%MPI_ERROR
+         end associate
+      end do
+    end subroutine print_status
   end function request_handler_testall
 
   !!
@@ -187,6 +188,7 @@ contains
   !!
   subroutine request_handler_manager_init (rhm, comm)
     class(request_handler_manager_t), intent(out) :: rhm
+    type(MPI_COMM), intent(in) :: comm
     call MPI_COMM_DUP (comm, rhm%comm)
   end subroutine request_handler_manager_init
 
@@ -261,32 +263,28 @@ contains
   !!
   !! \param[in] handler_id
   !! \param[in] source
-  !! \param[in] comm Communicator, must match with the corresponding communicator from the client-sided procedure.
-  subroutine request_handler_manager_callback (rhm, handler_id, source, comm)
+  subroutine request_handler_manager_callback (rhm, handler_id, source)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
     integer, intent(in) :: source
-    type(MPI_COMM), intent(in) :: comm
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%handle (source = source, tag = handler_id, comm = comm)
+    call handler%handle (source = source, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_callback
 
   !> Call client-sided procedure of callback with handler_id.
   !!
   !! \param[in] handler_id
   !! \param[in] source Destination rank.
-  !! \param[in] comm Communicator (must match between client and server-side procedure).
-  subroutine request_handler_manager_client_callback (rhm, handler_id, source, comm)
+  subroutine request_handler_manager_client_callback (rhm, handler_id, source)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
     integer, intent(in) :: source
-    type(MPI_COMM), intent(in) :: comm
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%client_handle (rank = source, tag = handler_id, comm = comm)
+    call handler%client_handle (rank = source, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
 

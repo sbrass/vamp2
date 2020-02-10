@@ -21,7 +21,8 @@ module request_simple
    contains
      procedure :: init => request_simple_init
      procedure :: write => request_simple_write
-     procedure :: map_channel_to_worker => request_simple_map_channel_to_worker
+     procedure, private  :: map_channel_to_worker => request_simple_map_channel_to_worker
+     procedure :: get_request_master => request_simple_get_request_master
      procedure :: request_workload => request_simple_request_workload
      procedure :: release_workload => request_simple_release_workload
      procedure :: handle_and_release_workload => request_simple_handle_and_release_workload
@@ -35,7 +36,7 @@ contains
     integer, intent(in) :: n_channels
     logical, dimension(:), intent(in) :: parallel_grid
     call req%base_init (comm)
-    call MPI_COMM_SIZE (comm, req%n_workers)
+    call MPI_COMM_SIZE (req%comm, req%n_workers)
     req%n_channels = n_channels
     req%parallel_grid = parallel_grid
     call req%channel_stack%init ()
@@ -77,8 +78,19 @@ contains
        result (worker)
     class(request_simple_t), intent(in) :: req
     integer, intent(in) :: channel
-    worker = mod (channel, req%n_workers)
+    worker = mod (channel - 1, req%n_workers)
   end function request_simple_map_channel_to_worker
+
+  pure integer function request_simple_get_request_master (req, channel) &
+       result (worker)
+    class(request_simple_t), intent(in) :: req
+    integer, intent(in) :: channel
+    if (req%parallel_grid(channel)) then
+       worker = 0
+    else
+       worker = req%map_channel_to_worker (channel)
+    end if
+  end function request_simple_get_request_master
 
   !> Request workload.
   !!
