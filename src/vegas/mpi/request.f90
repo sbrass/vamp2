@@ -8,6 +8,7 @@ module request_base
   use diagnostics
 
   use request_callback
+  use request_balancer
   use mpi_f08
 
   implicit none
@@ -58,12 +59,14 @@ module request_base
   !! Second, we require that the implementation of the polling honors this order.
   type, abstract :: request_base_t
      type(MPI_COMM) :: comm
+     class(request_balancer_t), allocatable :: balancer
      type(request_group_cache_t) :: cache
      type(request_handler_manager_t) :: handler
    contains
      procedure :: base_init => request_base_init
      procedure :: base_write => request_base_write
      procedure :: is_master => request_base_is_master
+     procedure :: add_balancer => request_base_add_balancer
      procedure :: add_handler => request_base_add_handler
      procedure :: clear_handler => request_base_clear_handler
      procedure :: call_handler => request_base_call_handler
@@ -179,6 +182,12 @@ contains
   !! request_base_t
   !! =================================================
 
+  !> Initialize request base with parent communicator.
+  !!
+  !! In order to separate the communication between different parts of the request library,
+  !! duplicate the parent communicator using MPI_COMM_DUP, also done by cache and handler objects.
+  !!
+  !! \param[in] comm Parent MPI communicator for overall library.
   subroutine request_base_init (req, comm)
     class(request_base_t), intent(out) :: req
     type(MPI_COMM), intent(in) :: comm
@@ -211,6 +220,20 @@ contains
     flag = (rank == 0)
   end function request_base_is_master
 
+  !> Add balancer to request.
+  !!
+  !! \param[inout] balancer
+  subroutine request_base_add_balancer (req, balancer)
+    class(request_base_t), intent(inout) :: req
+    class(request_balancer_t), allocatable, intent(inout) :: balancer
+    if (allocated (req%balancer)) deallocate (req%balancer)
+    call move_alloc (balancer, req%balancer)
+  end subroutine request_base_add_balancer
+
+  !> Add request handler with handler_id.
+  !!
+  !! \param[in] handler_id
+  !! \param[in] handler Pointer to handler object.
   subroutine request_base_add_handler (req, handler_id, handler)
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
@@ -218,6 +241,7 @@ contains
     call req%handler%add (handler_id, handler)
   end subroutine request_base_add_handler
 
+  !> Clear request handler manager from handler.
   subroutine request_base_clear_handler (req)
     class(request_base_t), intent(inout) :: req
     call req%handler%clear ()
@@ -242,6 +266,7 @@ contains
     call req%handler%client_callback (handler_id, 0)
   end subroutine request_base_call_client_handler
 
+  !> Wait on all handler in request handler manager to finish communication.
   subroutine request_base_await_handler (req)
     class(request_base_t), intent(inout) :: req
     call req%handler%waitall ()

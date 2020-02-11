@@ -19,10 +19,11 @@ module request_simple
      type(array_list_t) :: channel_stack
      type(array_list_t) :: finished_stack
    contains
-     procedure :: init => request_simple_init
      procedure :: write => request_simple_write
+     procedure :: update => request_simple_update
      procedure, private  :: map_channel_to_worker => request_simple_map_channel_to_worker
      procedure :: get_request_master => request_simple_get_request_master
+     !! deferred.
      procedure :: request_workload => request_simple_request_workload
      procedure :: release_workload => request_simple_release_workload
      procedure :: handle_and_release_workload => request_simple_handle_and_release_workload
@@ -30,12 +31,20 @@ module request_simple
 
   public :: request_simple_t
 contains
-  subroutine request_simple_init (req, comm, n_channels, parallel_grid)
+  !> Update number of channels and parallel grids.
+  !!
+  !! The simple request object does not utilize the request balancer, as the complexity of the request balancer is not required for the simple approach.
+  !! The simple approach assigns each worker several channel by a modular mapping from the set of workers {0, …, N} to the set of channels {1, …, N_c}.
+  !! Vetoing on those channel which have a parallel grid (check the definition in vegas.f90), where all workers are assigned.
+  !!
+  !! w = φ(c) = (c - 1) mod N, if not P(c), else ∀w to c.
+  !!
+  !! The information is stored in a dynamic-sized array list, which is filled, reversed and then used in a stack-like manner keeping track of the unassigned channels.
+  !! Assigned and finished channels are then moved to the finished stack.
+  subroutine request_simple_update (req, n_channels, parallel_grid)
     class(request_simple_t), intent(out) :: req
-    type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_channels
     logical, dimension(:), intent(in) :: parallel_grid
-    call req%base_init (comm)
     call MPI_COMM_SIZE (req%comm, req%n_workers)
     req%n_channels = n_channels
     req%parallel_grid = parallel_grid
@@ -61,7 +70,7 @@ contains
       end do
       call req%channel_stack%reverse_order ()
     end subroutine init_channel_stack
-  end subroutine request_simple_init
+  end subroutine request_simple_update
 
   subroutine request_simple_write (req, unit)
     class(request_simple_t), intent(in) :: req

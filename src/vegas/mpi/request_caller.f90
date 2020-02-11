@@ -16,12 +16,10 @@ module request_caller
   type, extends (request_base_t):: request_caller_t
      private
      integer :: n_workers = 0
-     class(request_balancer_t), allocatable :: balancer
      type(request_state_t) :: state
    contains
      procedure :: init => request_caller_init
      procedure :: write => request_caller_write
-     procedure :: add_balancer => request_caller_add_balancer
      procedure :: get_n_workers => request_caller_get_n_workers
      procedure, private :: provide_communicator_group => request_caller_provide_communicator_group
      procedure, private :: retrieve_communicator_group => request_caller_retrieve_communicator_group
@@ -54,13 +52,6 @@ contains
     !! Add Cache Write.
     !! Add State Write.
   end subroutine request_caller_write
-
-  subroutine request_caller_add_balancer (req, balancer)
-    class(request_caller_t), intent(inout) :: req
-    class(request_balancer_t), allocatable, intent(inout) :: balancer
-    if (allocated (req%balancer)) deallocate (req%balancer)
-    call move_alloc (balancer, req%balancer)
-  end subroutine request_caller_add_balancer
 
   integer function request_caller_get_n_workers (req) result (n_workers)
     class(request_caller_t), intent(in) :: req
