@@ -7,6 +7,7 @@ module vamp2
   use format_utils, only: write_separator, write_indent
   use format_defs, only: FMT_17
   use diagnostics
+  use iterator
   use rng_base
   use rng_stream, only: rng_stream_t
 
@@ -16,7 +17,8 @@ module vamp2
   use logging
   !! END REMOVE
 
-  use request_base, only: request_t
+  use request_base
+  use request_simple
   use request_callback
   use request_balancer
   use channel_balancer
@@ -123,7 +125,6 @@ module vamp2
      private
      type(vamp2_config_t) :: config
      type(vegas_t), dimension(:), allocatable :: integrator
-     type(request_caller_t) :: caller
      integer, dimension(:), allocatable :: chain
      real(default), dimension(:), allocatable :: weight
      real(default), dimension(:), allocatable :: integral
@@ -131,6 +132,7 @@ module vamp2
      real(default), dimension(:), allocatable :: efficiency
      type(vamp2_result_t) :: result
      type(vamp2_equivalences_t) :: equivalences
+     class(request_base_t), allocatable :: request
      logical :: event_prepared
      real(default), dimension(:), allocatable :: event_weight
    contains
@@ -153,8 +155,7 @@ module vamp2
      procedure, private :: apply_equivalences => vamp2_apply_equivalences
      procedure, public :: reset_result => vamp2_reset_result
      procedure, public :: integrate => vamp2_integrate
-     procedure, private :: export_weights_and_grids_to_func &
-          => vamp2_export_weights_and_grids_to_func
+     procedure, private :: compute_result_and_efficiency => vamp2_compute_result_and_efficiency
      procedure, public :: generate_weighted => vamp2_generate_weighted_event
      procedure, public :: generate_unweighted => vamp2_generate_unweighted_event
      procedure, public :: write_grids => vamp2_write_grids
@@ -186,9 +187,6 @@ module vamp2
   interface vamp2_t
      module procedure vamp2_init
   end interface vamp2_t
-
-
-  type(logging_t), private, save :: vamp2_log
 
 contains
 
@@ -488,12 +486,7 @@ contains
     integer :: ch
     self%config%n_dim = n_dim
     self%config%n_channel = n_channel
-    if (present (n_bins_max)) self%config%n_bins_max = n_bins_max
-    if (present (n_calls_min_per_channel)) self%config%n_calls_min_per_channel = n_calls_min_per_channel
-    if (present (alpha)) self%config%alpha = alpha
-    if (present (beta)) self%config%beta = beta
-    if (present (iterations)) self%config%iterations = iterations
-    if (present (mode)) self%config%mode = mode
+    call set_options ()
     allocate (self%chain(n_channel), source=0)
     allocate (self%integrator(n_channel))
     allocate (self%weight(n_channel), source=0._default)
@@ -504,23 +497,15 @@ contains
     call self%reset_result ()
     allocate (self%event_weight(self%config%n_channel), source = 0._default)
     self%event_prepared = .false.
-    call init_caller ()
-    !! BEGIN REMOVE
-    call vamp2_log%init (string ("debug"))
-    !! END REMOVE
   contains
-    subroutine init_caller ()
-      class(request_handler_t), pointer :: handler
-      integer :: ch
-      call self%caller%init (MPI_COMM_WORLD)
-      if (self%caller%is_master ()) then
-         !! Add callbacks of each channel integrator.
-         do ch = 1, self%config%n_channel
-            call self%integrator(ch)%allocate_handler (handler_id = ch, handler = handler)
-            call self%caller%add_handler (ch, handler)
-         end do
-      end if
-    end subroutine init_caller
+    subroutine set_options ()
+      if (present (n_bins_max)) self%config%n_bins_max = n_bins_max
+      if (present (n_calls_min_per_channel)) self%config%n_calls_min_per_channel = n_calls_min_per_channel
+      if (present (alpha)) self%config%alpha = alpha
+      if (present (beta)) self%config%beta = beta
+      if (present (iterations)) self%config%iterations = iterations
+      if (present (mode)) self%config%mode = mode
+    end subroutine set_options
   end function vamp2_init
 
   subroutine vamp2_final (self)
@@ -584,6 +569,30 @@ contains
        call self%integrator(ch)%set_calls (max (nint (self%config%n_calls *&
             & self%weight(ch)), self%config%n_calls_min_per_channel))
     end do
+  contains
+    subroutine init_request ()
+      class(request_handler_t), pointer :: handler
+      integer :: ch
+      allocate (request_simple_t :: self%request)
+      call self%request%base_init (MPI_COMM_WORLD)
+      select type (req => self%request)
+      type is (request_simple_t)
+         call msg_message ("VAMP2: Simple Request Balancing.")
+      type is (request_caller_t)
+         call msg_bug ("Request caller not implemented yet.")
+      class default
+         call msg_bug ("Unknown extension of request_base.")
+      end select
+      if (self%request%is_master ()) then
+         !! Setup callbacks for master, once.
+         do ch = 1, self%config%n_channel
+            call self%integrator(ch)%allocate_handler (&
+                 handler_id = ch,&
+                 handler = handler)
+            call self%request%add_handler (ch, handler)
+         end do
+      end if
+    end subroutine init_request
   end subroutine vamp2_set_n_calls
 
   subroutine vamp2_set_limits (self, x_upper, x_lower)
@@ -759,9 +768,8 @@ contains
     logical, intent(in), optional :: adapt_weights
     logical, intent(in), optional :: verbose
     real(default), optional, intent(out) :: result, abserr
-    integer :: it, ch, current_channel
-    real(default) :: total_integral, total_variance
-    real(default) :: sum_abs_f_pos, sum_abs_f_neg, max_abs_f_pos, max_abs_f_neg
+    integer :: it, ch
+    type(iterator_t) :: channel_iterator
     real(default) :: cumulative_int, cumulative_std
     logical :: opt_reset_result
     logical :: opt_adapt_weights
@@ -774,61 +782,44 @@ contains
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
-    cumulative_int = 0.
-    cumulative_std = 0.
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
-       current_channel = 0
-       total_integral = 0
-       total_variance = 0
-       call self%export_weights_and_grids_to_func (func)
        !! BEGIN MPI
        call broadcast_weights_and_grids ()
-       call init_balancer ()
-       if (self%caller%is_master ()) &
-            call self%caller%handle_workload ()
+       call prepare_handler () !! MASTER
        !! END MPI
-       ch = 1
-       channel: do
-       ! channel: do ch = 1, self%config%n_channel
+       call setup_func (func)
+       call channel_iterator%init (1, self%config%n_channel)
+       channel: do while (channel_iterator%is_iterable ())
+          ch = channel_iterator%get_current ()
           !! BEGIN MPI
-          write (LOG_BUFFER, "(A,1X,I0)") "CHANNEL", ch
-          call vamp2_log%append (string (LOG_BUFFER))
-          if (self%caller%is_master ()) exit channel
-          !! Advance RNG for each skipped channel.
-          print *, "=======> REQUEST"
-          call request_channel (request)
-          if (request%terminate) then
-             call advance_rng (ch, self%config%n_channel, rng)
-             exit channel
-          else
-             call advance_rng (ch, request%handler_id - 1, rng)
-          end if
+          call self%request%request_workload (request)
+          call advance_rng (channel_iterator, request, rng)
+          if (request%terminate) exit channel
+          if (request%group) call MPI_BARRIER (request%comm)
+          ch = request%handler_id
           !! END MPI
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
                & func, rng, iterations, refine_grid = .false., verbose = verbose)
           !! BEGIN MPI
-          print *, "=======> RELEASE"
-          call release_channel (request)
+          if (request%group_master) then
+             if (.not. self%request%is_master ())  &
+                  call allocate_handler (self%request, handler_id = ch)
+             call self%request%handle_and_release_workload (request)
+          else
+             call self%request%release_workload (request)
+          end if
           !! END MPI
-          ch = ch + 1
-          if (ch > self%config%n_channel) exit channel
+          call channel_iterator%next_step ()
        end do channel
-       ! call self%caller%await_handler ()
-       call MPI_BARRIER (MPI_COMM_WORLD)
-       if (.not. self%caller%is_master ()) cycle
+       call self%request%await_handler ()
+       if (.not. self%request%is_master ()) cycle
+       call self%compute_result_and_efficiency ()
        associate (result => self%result)
-         call compute_integral_and_variance (total_integral, total_variance)
-         call result%update (total_integral, total_variance)
-         call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
-              sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
-         call result%update_efficiency (n_calls  = 1, &
-              max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
-              sum_pos = sum_abs_f_neg, sum_neg = sum_abs_f_neg)
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
          cumulative_std = sqrt (1 / result%sum_wgts)
-         if (verbose) then
+         if (opt_verbose) then
             write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                  & it, self%config%n_calls, cumulative_int, cumulative_std, &
                  & result%chi2, result%efficiency
@@ -862,45 +853,61 @@ contains
       if (present (verbose)) opt_verbose = verbose
     end subroutine set_options
 
-    subroutine compute_integral_and_variance (integral, variance)
-      real(default), intent(out) :: integral, variance
-      real(default) :: sq_integral
-      integral = dot_product (self%weight, self%integrator%get_integral ())
-      sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
-      variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
-      variance = sqrt (variance + sq_integral)
-      variance = 1 / self%config%n_calls * &
-           & (total_variance + total_integral) * (total_variance - total_integral)
-    end subroutine compute_integral_and_variance
-
-    subroutine compute_efficiency (max_pos, max_neg, &
-      sum_pos, sum_neg)
-      real(default), intent(out) :: max_pos, max_neg
-      real(default), intent(out) :: sum_pos, sum_neg
-      max_abs_f_pos = maxval (self%integrator%get_max_abs_f_pos ())
-      max_abs_f_neg = maxval (self%integrator%get_max_abs_f_neg ())
-      sum_abs_f_pos = dot_product (self%weight, self%integrator%get_sum_abs_f_pos ())
-      sum_abs_f_neg = dot_product (self%weight, self%integrator%get_sum_abs_f_neg ())
-    end subroutine compute_efficiency
+    subroutine setup_func (func)
+      class(vamp2_func_t), intent(inout) :: func
+      integer :: ch
+      do ch = 1, self%config%n_channel
+         func%wi(ch) = self%weight(ch)
+         !! \todo Use pointers instead of a deep copy.
+         func%grids(ch) = self%integrator(ch)%get_grid ()
+      end do
+    end subroutine setup_func
 
     !! BEGIN MPI
     !! Balancer must be initiated after each time adapt_weights/refine is called,
     !! thus, we initialize the balancer for each iteration.
-    subroutine init_balancer ()
-      class(request_balancer_t), allocatable :: balancer
-      logical, dimension(:), allocatable :: parallel_grid
-      if (.not. self%caller%is_master ()) return
-      allocate (channel_balancer_t :: balancer)
-      parallel_grid = self%integrator%is_parallelizable () !! Allocate-on-assignment.
-      select type (balancer)
-      type is (channel_balancer_t)
-         call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
-         call balancer%add_parallel_grid (parallel_grid)
-         call balancer%add_channel_weight (self%weight)
-      end select
-      call self%caller%add_balancer (balancer)
-      call vamp2_log%append (string ("Add balancer..."))
-    end subroutine init_balancer
+    ! subroutine allocate_balancer ()
+    !   class(request_balancer_t), allocatable :: balancer
+    !   logical, dimension(:), allocatable :: parallel_grid
+    !   if (.not. self%request%is_master ()) return
+    !   allocate (channel_balancer_t :: balancer)
+    !   parallel_grid = self%integrator%is_parallelizable () !! Allocate-on-assignment.
+    !   select type (balancer)
+    !   type is (channel_balancer_t)
+    !      call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
+    !      call balancer%add_parallel_grid (parallel_grid)
+    !      call balancer%add_channel_weight (self%weight)
+    !   end select
+    !   call self%caller%add_balancer (balancer)
+    ! end subroutine allocate_balancer
+
+    subroutine prepare_handler ()
+      integer :: ch, worker
+      if (self%request%is_master ()) then
+         !! Master handler are setup once at initialization.
+         do ch = 1, self%config%n_channel
+            select type (req => self%request)
+            type is (request_simple_t)
+               worker = req%get_request_master (ch)
+               call req%call_handler (ch, worker)
+            type is (request_caller_t)
+               call msg_bug ("Request load balancing not yet implementet.")
+            class default
+               call msg_bug ("Unknown request_t extension.")
+            end select
+         end do
+      else !! Client always need to clear their respective handlers (as those may change during run time).
+         call self%request%clear_handler ()
+      end if
+    end subroutine prepare_handler
+
+    subroutine allocate_handler (req, handler_id)
+      class(request_base_t), intent(inout) :: req
+      integer, intent(in) :: handler_id
+      class(request_handler_t), pointer :: handler
+      call self%integrator(ch)%allocate_handler (handler_id, handler)
+      call req%add_handler (handler_id, handler)
+    end subroutine allocate_handler
 
     subroutine broadcast_weights_and_grids ()
       type(vegas_grid_t) :: grid
@@ -917,90 +924,74 @@ contains
       call self%set_calls (self%config%n_calls)
     end subroutine broadcast_weights_and_grids
 
-    subroutine request_channel (request)
-      type(request_t), intent(out) :: request
-      call self%caller%request_workload (request)
-      associate (channel => request%handler_id)
-        if (request%group) then
-           call self%integrator(channel)%set_comm (request%comm)
-        else
-           call self%integrator(channel)%set_comm (MPI_COMM_WORLD)
-        end if
-      end associate
-    end subroutine request_channel
-
-    subroutine advance_rng (ch, new_ch, rng)
+    subroutine advance_rng (iter, request, rng)
+      type(iterator_t), intent(inout) :: iter
+      type(request_t), intent(in) :: request
       class(rng_t), intent(inout) :: rng
-      integer, intent(in) :: ch, new_ch
-      integer :: i
-      do i = ch, new_ch
+      advance: do while (iter%is_iterable ())
+         !! Advance up to iterator%end when in terminate mode,
+         !! else advance until we hit the previous channel (of request%handler_id):
+         !! Proof: current_channel <= request%handler_id - 1
+         if (.not. request%terminate) then
+            if (.not. iter%get_current () < request%handler_id) &
+                 exit advance
+         end if
          select type (rng)
          type is (rng_stream_t)
             call rng%next_substream ()
          end select
-      end do
+         call iter%next_step ()
+      end do advance
     end subroutine advance_rng
 
-    subroutine release_channel (request)
-      type(request_t), intent(in) :: request
-      class(request_handler_t), pointer :: handler
-      associate (channel => request%handler_id)
-        if (request%callback) then
-           call self%integrator(channel)%allocate_handler ( &
-                handler_id = request%handler_id, &
-                handler = handler)
-           call self%caller%add_handler (ch, handler)
-           call self%caller%handle_and_release_workload (request)
-        else
-           call self%caller%release_workload (request)
-        end if
-      end associate
-    end subroutine release_channel
-
-    subroutine vamp2_integrate_collect ()
-      type(vegas_result_t) :: result
+    subroutine reduce_func_calls (func)
+      class(vamp2_func_t), intent(inout) :: func
       integer :: root_n_calls
-      integer :: worker
-      ! do ch = 1, self%config%n_channel
-      !    if (self%integrator(ch)%is_parallelizable ()) cycle
-      !    worker = map_channel_to_worker (ch, n_size)
-      !    result = self%integrator(ch)%get_result ()
-      !    if (rank == 0) then
-      !       if (worker /= 0) then
-      !          call result%receive (worker, ch)
-      !          call self%integrator(ch)%receive_distribution (worker, ch)
-      !          call self%integrator(ch)%set_result (result)
-      !       end if
-      !    else
-      !       if (rank == worker) then
-      !          call result%send (0, ch)
-      !          call self%integrator(ch)%send_distribution (0, ch)
-      !       end if
-      !    end if
-      ! end do
-      select type (func)
-      class is (vamp2_func_t)
-         call MPI_reduce (func%n_calls, root_n_calls, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD)
-         if (self%caller%is_master ()) then
-            func%n_calls = root_n_calls
-         else
-            call func%reset_n_calls ()
-         end if
-      end select
-    end subroutine vamp2_integrate_collect
-
+      call MPI_reduce (func%n_calls, root_n_calls, 1, MPI_INTEGER, &
+           MPI_SUM, 0, MPI_COMM_WORLD)
+      if (self%request%is_master ()) then
+         func%n_calls = root_n_calls
+      else
+         call func%reset_n_calls ()
+      end if
+    end subroutine reduce_func_calls
   end subroutine vamp2_integrate
 
-  subroutine vamp2_export_weights_and_grids_to_func (self, func)
-    class(vamp2_t), intent(in) :: self
-    class(vamp2_func_t), intent(inout) :: func
-    integer :: ch
-    do ch = 1, self%config%n_channel
-       func%wi(ch) = self%weight(ch)
-       !! \todo Use pointers instead of a deep copy.
-       func%grids(ch) = self%integrator(ch)%get_grid ()
-    end do
-  end subroutine vamp2_export_weights_and_grids_to_func
+  !> Compute the result and efficiency of the current status of the integrator.
+  subroutine vamp2_compute_result_and_efficiency (self)
+    class(vamp2_t), intent(inout) :: self
+    real(default) :: total_integral, total_variance
+    real(default) :: max_abs_f_pos, max_abs_f_neg, &
+         sum_abs_f_pos, sum_abs_f_neg
+    call compute_integral_and_variance (total_integral, total_variance)
+    call self%result%update (total_integral, total_variance)
+    call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+         sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
+    call self%result%update_efficiency (n_calls  = 1, &
+         max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+         sum_pos = sum_abs_f_neg, sum_neg = sum_abs_f_neg)
+  contains
+    subroutine compute_integral_and_variance (integral, variance)
+      real(default), intent(out) :: integral, variance
+      real(default) :: sq_integral
+      integral = dot_product (self%weight, self%integrator%get_integral ())
+      sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
+      variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
+      variance = sqrt (variance + sq_integral)
+      variance = 1 / self%config%n_calls * &
+           & (total_variance + total_integral) * (total_variance - total_integral)
+    end subroutine compute_integral_and_variance
+
+    subroutine compute_efficiency (max_pos, max_neg, &
+         sum_pos, sum_neg)
+      real(default), intent(out) :: max_pos, max_neg
+      real(default), intent(out) :: sum_pos, sum_neg
+      max_abs_f_pos = maxval (self%integrator%get_max_abs_f_pos ())
+      max_abs_f_neg = maxval (self%integrator%get_max_abs_f_neg ())
+      sum_abs_f_pos = dot_product (self%weight, self%integrator%get_sum_abs_f_pos ())
+      sum_abs_f_neg = dot_product (self%weight, self%integrator%get_sum_abs_f_neg ())
+    end subroutine compute_efficiency
+  end subroutine vamp2_compute_result_and_efficiency
 
   subroutine vamp2_generate_weighted_event (&
        self, func, rng, x)

@@ -48,7 +48,7 @@ binary_tree_1 = executable('binary_tree_1', 'binary_tree_1.f90',
                            link_with : utils)
 logging_1 = executable('logging_1', 'logging_1.f90',
                        link_with : utils)
-mpi_simple_1 = executable('mpi_simple_1', 'mpi_simple.f90',
+mpi_simple_1 = executable('mpi_simple_1', 'mpi_simple_1.f90',
                           link_with : [load_balancer,
                                        utils,
                                        rng,
@@ -56,6 +56,15 @@ mpi_simple_1 = executable('mpi_simple_1', 'mpi_simple.f90',
                                        test_utils,
                                        signal],
                          link_language : 'fortran')
+mpi_simple_2 = executable('mpi_simple_2', 'mpi_simple_2.f90',
+                          link_with : [load_balancer,
+                                       utils,
+                                       rng,
+                                       result_handler,
+                                       test_utils,
+                                       signal],
+                          link_language : 'fortran')
+
 
 test('Request balancer initialization.', balancer_1)
 test('Request balancer add partition.', balancer_2)
@@ -65,6 +74,8 @@ test('Simple queue.', queue_1)
 test('Array List.', array_list_1)
 test('Iterator.', iterator_1)
 test('Binary tree.', binary_tree_1, should_fail : true)
+test('Simple Request.', mpi_simple_1)
+test('Simple Request (iterated).', mpi_simple_2)
 
 
 

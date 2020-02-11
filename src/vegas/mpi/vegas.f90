@@ -173,8 +173,6 @@ module vegas
      procedure, public :: allocate_handler => vegas_allocate_handler
      procedure, public :: get_distribution => vegas_get_distribution
      procedure, public :: set_distribution => vegas_set_distribution
-     procedure, public :: send_distribution => vegas_send_distribution
-     procedure, public :: receive_distribution => vegas_receive_distribution
      procedure, private :: init_grid => vegas_init_grid
      procedure, public :: reset_result => vegas_reset_result
      procedure, public :: reset_grid => vegas_reset_grid
@@ -975,42 +973,6 @@ contains
     end if
     self%d = d
   end subroutine vegas_set_distribution
-
-  subroutine vegas_send_distribution (self, receiver, tag)
-    class(vegas_t), intent(in) :: self
-    integer, intent(in) :: receiver
-    integer, intent(in) :: tag
-    integer :: j
-    type(MPI_Request), dimension(self%config%n_dim + 2) :: request
-    call MPI_Isend (self%bin, self%config%n_dim, MPI_INTEGER, receiver, tag + 1&
-         &, self%comm, request(1))
-    call MPI_Isend (self%box, self%config%n_dim, MPI_INTEGER, receiver, tag + 2&
-         &, self%comm, request(2))
-    do j = 1, self%config%n_dim
-       call MPI_Isend (self%d(:, j), self%config%n_bins_max,&
-            & MPI_DOUBLE_PRECISION, receiver, tag + j + 2, self%comm,&
-            & request(j + 2))
-    end do
-    call MPI_Waitall (self%config%n_dim, request, MPI_STATUSES_IGNORE)
-  end subroutine vegas_send_distribution
-
-  subroutine vegas_receive_distribution (self, sender, tag)
-    class(vegas_t), intent(inout) :: self
-    integer, intent(in) :: sender
-    integer, intent(in) :: tag
-    integer :: j
-    type(MPI_Request), dimension(self%config%n_dim + 2) :: request
-    call MPI_Irecv (self%bin, self%config%n_dim, MPI_INTEGER, sender, tag + 1&
-         &, self%comm, request(1))
-    call MPI_Irecv (self%box, self%config%n_dim, MPI_INTEGER, sender, tag + 2&
-         &, self%comm, request(2))
-    do j = 1, self%config%n_dim
-       call MPI_Irecv (self%d(:, j), self%config%n_bins_max,&
-            & MPI_DOUBLE_PRECISION, sender, tag + j + 2, self%comm,&
-            & request(j + 2))
-    end do
-    call MPI_Waitall (self%config%n_dim, request, MPI_STATUSES_IGNORE)
-  end subroutine vegas_receive_distribution
 
   subroutine vegas_init_grid (self)
     class(vegas_t), intent(inout) :: self
