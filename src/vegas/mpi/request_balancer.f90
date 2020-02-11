@@ -218,19 +218,7 @@ contains
     end do
   end subroutine request_balancer_init_partition_state
 
-  !> Add resource weights.
-  !! The resource weights have to be positive real numbers.
-  !! We normalize the weights and apply them as prior to the load balancing.
-  subroutine request_balancer_add_resource_weight (balancer, resource_weight)
-    class(request_balancer_t), intent(inout) :: balancer
-    real(default), dimension(:), intent(in) :: resource_weight
-    if (size (resource_weight) /= balancer%n_resources) then
-       call msg_bug ("Balancer: Mismatched size of resource weights")
-    end if
-    balancer%resource%weight = (resource_weight / sum (resource_weight))
-  end subroutine request_balancer_add_resource_weight
-
-   !> Add partition of workers and link with workers.
+  !> Add partition of workers and link with workers.
   !! We move the allocated partition object into the balancer.
   !! We then assign each partition its respective number of workers in a incrementing linear fashion.
   !! However, we postpone the linking of the resources to the partition, which can be either done dynamically with the balancer state or directly with the appropriate type-bound procedure.

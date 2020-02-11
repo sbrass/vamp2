@@ -39,7 +39,6 @@ module resources
 
   type :: resource_t
      integer :: resource_id = 0
-     real(default) :: weight = 0
      integer :: n_assigned_workers = 0
    contains
      procedure :: write => resource_write
