@@ -166,7 +166,6 @@ contains
     type(binary_tree_t), intent(inout) :: btree
     btree%n_elements = 0
     if (associated (btree%root)) then
-       ! call btree%root%final ()
        deallocate (btree%root)
     end if
   end subroutine binary_tree_final

@@ -44,9 +44,10 @@ program main
 
 #ifdef MPI
   allocate (request_simple_t :: req)
+  call req%base_init (MPI_COMM_WORLD)
   select type (req)
   type is (request_simple_t)
-     call req%init (MPI_COMM_WORLD, n_channels, parallel_grid)
+     call req%update (n_channels, parallel_grid)
   end select
 #endif
 

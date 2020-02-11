@@ -45,6 +45,7 @@ contains
     class(request_simple_t), intent(out) :: req
     integer, intent(in) :: n_channels
     logical, dimension(:), intent(in) :: parallel_grid
+    call req%handler%clear ()
     call MPI_COMM_SIZE (req%comm, req%n_workers)
     req%n_channels = n_channels
     req%parallel_grid = parallel_grid
