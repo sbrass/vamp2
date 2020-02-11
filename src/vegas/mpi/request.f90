@@ -65,6 +65,7 @@ module request_base
      procedure :: base_write => request_base_write
      procedure :: is_master => request_base_is_master
      procedure :: add_handler => request_base_add_handler
+     procedure :: clear_handler => request_base_clear_handler
      procedure :: call_handler => request_base_call_handler
      procedure :: call_client_handler => request_base_call_client_handler
      procedure :: await_handler => request_base_await_handler
@@ -216,6 +217,11 @@ contains
     class(request_handler_t), pointer, intent(in) :: handler
     call req%handler%add (handler_id, handler)
   end subroutine request_base_add_handler
+
+  subroutine request_base_clear_handler (req)
+    class(request_base_t), intent(inout) :: req
+    call req%handler%clear ()
+  end subroutine request_base_clear_handler
 
   !> Call handler for master communication for handler_id.
   !!
