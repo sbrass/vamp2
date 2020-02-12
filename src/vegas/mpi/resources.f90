@@ -15,22 +15,23 @@ module resources
      procedure :: write => resource_write
   end type resource_t
 
+  integer, parameter :: STATE_SINGLE = 1, &
+       STATE_ALL = 2
+
   type :: resource_state_t
-     type(array_list_t) :: unassigned
-     type(array_list_t) :: started
-     type(array_list_t) :: finished
+     integer :: n_workers = 0
+     integer :: mode = 0
+     type(array_list_t) :: resource_stack
+     type(array_list_t) :: finished_stack
    contains
      procedure :: write => resource_state_write
      procedure :: init => resource_state_init
      procedure :: add_resource => resource_state_add_resource
      procedure :: freeze => resource_state_freeze
-     procedure :: has_unassigned_resource => resource_state_has_unassigned_resource
-     procedure :: start_resource => resource_state_start_resource
-     procedure :: has_started_resource => resource_state_has_started_resource
-     procedure :: is_started_resource => resource_state_is_started_resource
-     procedure :: finish_resource => resource_state_finish_resource
-     procedure :: is_finished_resource => resource_state_is_finished_resource
-     procedure :: all_finished_resources => resource_state_all_finished_resources
+     procedure :: clear => resource_state_clear
+     procedure :: has_resource => resource_state_has_resource
+     procedure :: assign_resource => resource_state_assign_resource
+     procedure :: free_resource => resource_state_free_resource
   end type resource_state_t
 
   public :: resource_t, resource_state_t
@@ -40,9 +41,8 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
-    write (u, "(A,1X,I3,1X,A,1X,F7.4,1X,2(A,1X,I3,1X),2(A,1X,L1,1X))") &
+    write (u, "(A,1X,I3,1X,A,1X,I3)") &
          "RESOURCE_ID", resource%resource_id, &
-         "WEIGHT", resource%weight, &
          "N_ASSIGNED_WORKERS", resource%n_assigned_workers
   end subroutine resource_write
 
@@ -51,91 +51,72 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
-    write (u, "(A)") "UNASSIGNED"
-    call state%unassigned%write (u)
-    write (u, "(A)") "STARTED"
-    call state%started%write (u)
+    write (u, "(A,1X,I0)") "N_STATE_WORKERS", state%n_workers
+    select case (state%mode)
+    case (STATE_SINGLE)
+       write (u, "(A)") "MODE ONE-TO-ONE"
+    case (STATE_ALL)
+       write (u, "(A)") "MODE ALL-TO-ONE"
+    case default
+       write (u, "(A)") "UNSUPPORTED MODE"
+    end select
+    write (u, "(A)") "RESOURCE"
+    call state%resource_stack%write (u)
     write (u, "(A)") "FINISHED"
-    call state%finished%write (u)
+    call state%finished_stack%write (u)
   end subroutine resource_state_write
 
-  subroutine resource_state_init (state)
+  subroutine resource_state_init (state, mode, n_workers)
     class(resource_state_t), intent(out) :: state
-    call state%unassigned%init ()
-    call state%started%init ()
-    call state%finished%init ()
+    integer, intent(in) :: mode
+    integer, intent(in) :: n_workers
+    state%mode = mode
+    state%n_workers = n_workers
+    call state%resource_stack%init ()
+    call state%finished_stack%init ()
   end subroutine resource_state_init
 
   subroutine resource_state_add_resource (state, i_resource)
     class(resource_state_t), intent(inout) :: state
     integer, intent(in) :: i_resource
-    call state%unassigned%add (i_resource)
+    call state%resource_stack%add (i_resource)
   end subroutine resource_state_add_resource
 
   subroutine resource_state_freeze (state)
     class(resource_state_t), intent(inout) :: state
-    call state%unassigned%sort ()
-    call state%unassigned%reverse_order ()
+    call state%resource_stack%sort ()
+    call state%resource_stack %reverse_order ()
   end subroutine resource_state_freeze
 
-  pure function resource_state_has_unassigned_resource (state) result (flag)
+  subroutine resource_state_clear (state)
+    class(resource_state_t), intent(inout) :: state
+    call state%resource_stack%clear ()
+    call state%finished_stack%clear ()
+  end subroutine resource_state_clear
+
+  elemental function resource_state_has_resource (state) result (flag)
     class(resource_state_t), intent(in) :: state
     logical :: flag
-    flag = .not. state%unassigned%is_empty ()
-  end function resource_state_has_unassigned_resource
+    flag = .not. state%resource_stack%is_empty ()
+  end function resource_state_has_resource
 
-  function resource_state_start_resource (state) result (i_resource)
+  function resource_state_assign_resource (state) result (i_resource)
     class(resource_state_t), intent(inout) :: state
     integer :: i_resource
-    if (.not. state%has_unassigned_resource ()) then
+    if (state%resource_stack%is_empty ()) then
        i_resource = 0
+       call msg_bug ("Error: No leftover resource on stack.")
        return
     end if
-    i_resource = state%unassigned%remove ()
-    call state%started%add (i_resource)
-  end function resource_state_start_resource
+    i_resource = state%resource_stack%remove () !! Pop last element from stack.
+  end function resource_state_assign_resource
 
-  pure function resource_state_has_started_resource (state) result (flag)
-    class(resource_state_t), intent(in) :: state
-    logical :: flag
-    flag = .not. state%started%is_empty ()
-  end function resource_state_has_started_resource
-
-  pure function resource_state_is_started_resource (state, i_resource) result (flag)
-    class(resource_state_t), intent(in) :: state
-    integer, intent(in) :: i_resource
-    logical :: flag
-    flag = state%started%is_element (i_resource)
-  end function resource_state_is_started_resource
-
-  subroutine resource_state_finish_resource (state, i_resource)
+  subroutine resource_state_free_resource (state, i_resource)
     class(resource_state_t), intent(inout) :: state
     integer, intent(in) :: i_resource
-    integer :: ndx, element !! INDEX
-    if (.not. state%has_started_resource ()) return
-    ndx = state%started%find (i_resource)
-    if (ndx > 0) then
-       !! ATOMIC BEGIN
-       element = state%started%remove_at (ndx)
-       call state%finished%add (element)
-       !! ATOMIC END
-    else
-       write (msg_buffer, "(A,1X,I3,1X,A)") "RESOURCE", i_resource, "NOT FOUND IN STARTED."
-       call msg_bug ()
+    if (state%resource_stack%is_element (i_resource)) then
+       call msg_bug ("Error: Cannot free resource, still on resource stack.")
     end if
-  end subroutine resource_state_finish_resource
-
-  pure function resource_state_is_finished_resource (state, i_resource) result (flag)
-    class(resource_state_t), intent(in) :: state
-    integer, intent(in) :: i_resource
-    logical :: flag
-    flag = state%finished%is_element (i_resource)
-  end function resource_state_is_finished_resource
-
-  elemental function resource_state_all_finished_resources (state) result (flag)
-    class(resource_state_t), intent(in) :: state
-    logical :: flag
-    flag = state%unassigned%is_empty () .and. state%started%is_empty ()
-  end function resource_state_all_finished_resources
+    call state%finished_stack%add (i_resource)
+  end subroutine resource_state_free_resource
 end module resources
-
