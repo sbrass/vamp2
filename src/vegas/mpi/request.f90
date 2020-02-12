@@ -7,8 +7,8 @@ module request_base
 
   use diagnostics
 
+  use balancer_base
   use request_callback
-  use request_balancer
   use mpi_f08
 
   implicit none
@@ -59,7 +59,7 @@ module request_base
   !! Second, we require that the implementation of the polling honors this order.
   type, abstract :: request_base_t
      type(MPI_COMM) :: comm
-     class(request_balancer_t), allocatable :: balancer
+     class(balancer_base_t), allocatable :: balancer
      type(request_group_cache_t) :: cache
      type(request_handler_manager_t) :: handler
    contains
@@ -202,6 +202,7 @@ contains
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
     write (ERROR_UNIT, "(A)") "request_base_write"
+    call req%balancer%write (u)
     call req%handler%write (u)
   end subroutine request_base_write
 
@@ -225,7 +226,7 @@ contains
   !! \param[inout] balancer
   subroutine request_base_add_balancer (req, balancer)
     class(request_base_t), intent(inout) :: req
-    class(request_balancer_t), allocatable, intent(inout) :: balancer
+    class(balancer_base_t), allocatable, intent(inout) :: balancer
     if (allocated (req%balancer)) deallocate (req%balancer)
     call move_alloc (balancer, req%balancer)
   end subroutine request_base_add_balancer

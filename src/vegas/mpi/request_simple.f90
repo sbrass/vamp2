@@ -3,6 +3,8 @@ module request_simple
 
   use array_list
 
+  use balancer_base
+  use balancer_simple
   use request_base
 
   use mpi_f08
@@ -15,13 +17,10 @@ module request_simple
      integer :: n_workers = 0
      integer :: n_channels = 0
      logical, dimension(:), allocatable :: parallel_grid
-     !! Use array list as dynamically-sized stack.
-     type(array_list_t) :: channel_stack
-     type(array_list_t) :: finished_stack
    contains
+     procedure :: init => request_simple_init
      procedure :: write => request_simple_write
      procedure :: update => request_simple_update
-     procedure, private  :: map_channel_to_worker => request_simple_map_channel_to_worker
      procedure :: get_request_master => request_simple_get_request_master
      !! deferred.
      procedure :: request_workload => request_simple_request_workload
@@ -31,6 +30,23 @@ module request_simple
 
   public :: request_simple_t
 contains
+  subroutine request_simple_init (req, comm, n_channels)
+    class(request_simple_t), intent(out) :: req
+    type(MPI_COMM), intent(in) :: comm
+    integer, intent(in) :: n_channels
+    integer :: n_workers
+    class(balancer_base_t), allocatable :: balancer
+    call req%base_init (comm)
+    call MPI_COMM_SIZE (req%comm, req%n_workers)
+    req%n_channels = n_channels
+    allocate (balancer_simple_t :: balancer)
+    select type (balancer)
+    type is (balancer_simple_t)
+       call balancer%init (req%n_channels, req%n_workers)
+    end select
+    call req%add_balancer (balancer)
+  end subroutine request_simple_init
+
   !> Update number of channels and parallel grids.
   !!
   !! The simple request object does not utilize the request balancer, as the complexity of the request balancer is not required for the simple approach.
@@ -41,36 +57,16 @@ contains
   !!
   !! The information is stored in a dynamic-sized array list, which is filled, reversed and then used in a stack-like manner keeping track of the unassigned channels.
   !! Assigned and finished channels are then moved to the finished stack.
-  subroutine request_simple_update (req, n_channels, parallel_grid)
+  subroutine request_simple_update (req, parallel_grid)
     class(request_simple_t), intent(out) :: req
-    integer, intent(in) :: n_channels
     logical, dimension(:), intent(in) :: parallel_grid
+    integer :: me
     call req%handler%clear ()
-    call MPI_COMM_SIZE (req%comm, req%n_workers)
-    req%n_channels = n_channels
-    req%parallel_grid = parallel_grid
-    call req%channel_stack%init ()
-    call req%finished_stack%init ()
-    call init_channel_stack ()
-  contains
-    !> Add each channel to the channel array list which is either a parallelizable grid,
-    !! or the channels maps to the current rank.
-    !! After filling the array list, we reverse the order of the array list,
-    !! and use it in a quasi stack-like manne:r emoving an channel from the end of the list when requesting.
-    subroutine init_channel_stack ()
-      integer :: ch
-      integer :: worker, rank
-      call MPI_COMM_RANK (req%comm, rank)
-      do ch = 1, req%n_channels
-         if (parallel_grid(ch)) then
-            call req%channel_stack%add (ch)
-         else
-            worker = req%map_channel_to_worker (ch)
-            if (worker == rank) call req%channel_stack%add (ch)
-         end if
-      end do
-      call req%channel_stack%reverse_order ()
-    end subroutine init_channel_stack
+    call MPI_COMM_RANK (req%comm, me)
+    select type (balancer => req%balancer)
+    type is (balancer_simple_t)
+       call balancer%update_state (me, parallel_grid)
+    end select
   end subroutine request_simple_update
 
   subroutine request_simple_write (req, unit)
@@ -79,27 +75,16 @@ contains
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
     call req%base_write (u)
-    write (ERROR_UNIT, "(A)") "request_simple_write"
-    call req%channel_stack%write (u)
-    call req%finished_stack%write (u)
   end subroutine request_simple_write
-
-  pure integer function request_simple_map_channel_to_worker (req, channel) &
-       result (worker)
-    class(request_simple_t), intent(in) :: req
-    integer, intent(in) :: channel
-    worker = mod (channel - 1, req%n_workers)
-  end function request_simple_map_channel_to_worker
 
   pure integer function request_simple_get_request_master (req, channel) &
        result (worker)
     class(request_simple_t), intent(in) :: req
     integer, intent(in) :: channel
-    if (req%parallel_grid(channel)) then
-       worker = 0
-    else
-       worker = req%map_channel_to_worker (channel)
-    end if
+    select type (balancer => req%balancer)
+    type is (balancer_simple_t)
+       worker = balancer%get_resource_master (channel)
+    end select
   end function request_simple_get_request_master
 
   !> Request workload.
@@ -113,11 +98,13 @@ contains
   subroutine request_simple_request_workload (req, request)
     class(request_simple_t), intent(inout) :: req
     type(request_t), intent(out) :: request
-    if (req%channel_stack%is_empty ()) then
+    integer :: worker_id
+    if (.not. req%balancer%is_pending ()) then
        request%terminate = .true.
        return
     end if
-    request%handler_id = req%channel_stack%remove () !! pop last element.
+    call MPI_COMM_RANK (req%comm, worker_id)
+    call req%balancer%assign_worker (worker_id, request%handler_id)
     associate (channel => request%handler_id)
       if (req%parallel_grid (channel)) then
          request%comm = req%comm
@@ -137,7 +124,9 @@ contains
   subroutine request_simple_release_workload (req, request)
     class(request_simple_t), intent(inout) :: req
     type(request_t), intent(in) :: request
-    call req%finished_stack%add (request%handler_id)
+    integer :: worker_id
+    call MPI_COMM_RANK (req%comm, worker_id)
+    call req%balancer%free_worker (worker_id)
   end subroutine request_simple_release_workload
 
   subroutine request_simple_handle_and_release_workload (req, request)
