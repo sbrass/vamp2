@@ -1,4 +1,4 @@
-module request_balancer
+module balancer_base
   use kinds, only: default
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use array_list
@@ -10,7 +10,6 @@ module request_balancer
   private
 
   type :: worker_t
-     private
      integer :: resource = 0
      integer :: partition = 0
      integer :: n_resources = 0
@@ -28,7 +27,7 @@ module request_balancer
      procedure :: write => resource_write
   end type resource_t
 
-  integer, parameter :: STATE_SINGLE = 1, &
+  integer, parameter, public :: STATE_SINGLE = 1, &
        STATE_ALL = 2
 
   type :: resource_state_t
@@ -54,8 +53,7 @@ module request_balancer
   !!
   !! The balancer aggregates a dynamic state, however, we allow the state by
   !! the use of a pointer, to access the static fields of the balancer.
-  type, abstract :: request_balancer_t
-     private
+  type, abstract :: balancer_base_t
      integer :: n_workers = 0
      integer :: n_resources = 0
      integer :: n_states = 0
@@ -63,64 +61,64 @@ module request_balancer
      type(resource_t), dimension(:), allocatable :: resource
      type(resource_state_t), dimension(:), allocatable :: state
    contains
-     procedure :: write => request_balancer_write
-     procedure :: base_init => request_balancer_base_init
-     procedure :: add_state => request_balancer_add_state
-     procedure :: is_assignable => request_balancer_is_assignable
-     procedure :: is_pending => request_balancer_is_pending
-     procedure(request_balancer_has_resource_group), deferred :: has_resource_group
-     procedure(request_balancer_get_resource_group), deferred :: get_resource_group
-     procedure(request_balancer_get_resource_master), deferred :: get_resource_master
-     procedure(request_balancer_assign_worker), deferred :: assign_worker
-     procedure(request_balancer_free_worker), deferred :: free_worker
-  end type request_balancer_t
+     procedure :: write => balancer_base_write
+     procedure :: base_init => balancer_base_base_init
+     procedure :: add_state => balancer_base_add_state
+     procedure :: is_assignable => balancer_base_is_assignable
+     procedure :: is_pending => balancer_base_is_pending
+     procedure(balancer_base_has_resource_group), deferred :: has_resource_group
+     procedure(balancer_base_get_resource_group), deferred :: get_resource_group
+     procedure(balancer_base_get_resource_master), deferred :: get_resource_master
+     procedure(balancer_base_assign_worker), deferred :: assign_worker
+     procedure(balancer_base_free_worker), deferred :: free_worker
+  end type balancer_base_t
 
   abstract interface
      !> Pure forbids any MPI intrusion!!
-     pure logical function request_balancer_has_resource_group (balancer, resource_id) &
+     pure logical function balancer_base_has_resource_group (balancer, resource_id) &
           result (flag)
-       import :: request_balancer_t
-       class(request_balancer_t), intent(in) :: balancer
+       import :: balancer_base_t
+       class(balancer_base_t), intent(in) :: balancer
        integer, intent(in) :: resource_id
-     end function request_balancer_has_resource_group
+     end function balancer_base_has_resource_group
 
-     pure subroutine request_balancer_get_resource_group (balancer, resource_id, group)
-       import :: request_balancer_t
-       class(request_balancer_t), intent(in) :: balancer
+     pure subroutine balancer_base_get_resource_group (balancer, resource_id, group)
+       import :: balancer_base_t
+       class(balancer_base_t), intent(in) :: balancer
        integer, intent(in) :: resource_id
        integer, dimension(:), allocatable, intent(out) :: group
-     end subroutine request_balancer_get_resource_group
+     end subroutine balancer_base_get_resource_group
 
-     pure integer function request_balancer_get_resource_master (balancer, resource_id) &
+     pure integer function balancer_base_get_resource_master (balancer, resource_id) &
           result (worker)
-       import :: request_balancer_t
-       class(request_balancer_t), intent(in) :: balancer
+       import :: balancer_base_t
+       class(balancer_base_t), intent(in) :: balancer
        integer, intent(in) :: resource_id
-     end function request_balancer_get_resource_master
+     end function balancer_base_get_resource_master
 
      !> Assign resource to a given worker or retrieve current assigned resource.
      !!
      !! If worker has already a resource assigned, return resource.
      !! If worker has not assigned a resource, retrieve new resource from state.
-     subroutine request_balancer_assign_worker (balancer, worker_id, resource_id)
-       import :: request_balancer_t
-       class(request_balancer_t), intent(inout) :: balancer
+     subroutine balancer_base_assign_worker (balancer, worker_id, resource_id)
+       import :: balancer_base_t
+       class(balancer_base_t), intent(inout) :: balancer
        integer, intent(in) :: worker_id
        integer, intent(out) :: resource_id
-     end subroutine request_balancer_assign_worker
+     end subroutine balancer_base_assign_worker
 
      !> Free assignment of worker.
      !!
      !! If worker is not assigned, this procedure is idempotent.
      !! If worker is assigned, alter state correspondingly.
-     subroutine request_balancer_free_worker (balancer, worker_id)
-       import :: request_balancer_t
-       class(request_balancer_t), intent(inout) :: balancer
+     subroutine balancer_base_free_worker (balancer, worker_id)
+       import :: balancer_base_t
+       class(balancer_base_t), intent(inout) :: balancer
        integer, intent(in) :: worker_id
-     end subroutine request_balancer_free_worker
+     end subroutine balancer_base_free_worker
   end interface
 
-  public :: request_balancer_t
+  public :: balancer_base_t, resource_state_t
 contains
   subroutine worker_write (worker, unit)
     class(worker_t), intent(in) :: worker
@@ -231,8 +229,8 @@ contains
     call state%finished_stack%add (i_resource)
   end subroutine resource_state_free_resource
 
-  subroutine request_balancer_write (balancer, unit)
-    class(request_balancer_t), intent(in) :: balancer
+  subroutine balancer_base_write (balancer, unit)
+    class(balancer_base_t), intent(in) :: balancer
     integer, intent(in), optional :: unit
     integer :: u, i
     u = ERROR_UNIT; if (present (unit)) u = unit
@@ -252,24 +250,24 @@ contains
     do i = 1, balancer%n_states
        call balancer%state(i)%write (u)
     end do
-  end subroutine request_balancer_write
+  end subroutine balancer_base_write
 
-  subroutine request_balancer_base_init (balancer, n_workers, n_resources)
-    class(request_balancer_t), intent(out) :: balancer
+  subroutine balancer_base_base_init (balancer, n_workers, n_resources)
+    class(balancer_base_t), intent(out) :: balancer
     integer, intent(in) :: n_workers
     integer, intent(in) :: n_resources
     balancer%n_workers = n_workers
     balancer%n_resources = n_resources
     allocate (balancer%worker (n_workers))
     allocate (balancer%resource (n_resources))
-  end subroutine request_balancer_base_init
+  end subroutine balancer_base_base_init
 
   !> Add partition of workers and link with workers.
   !! We move the allocated partition object into the balancer.
   !! We then assign each partition its respective number of workers in a incrementing linear fashion.
   !! However, we postpone the linking of the resources to the partition, which can be either done dynamically with the balancer state or directly with the appropriate type-bound procedure.
-  subroutine request_balancer_add_state (balancer, state)
-    class(request_balancer_t), intent(inout) :: balancer
+  subroutine balancer_base_add_state (balancer, state)
+    class(balancer_base_t), intent(inout) :: balancer
     type(resource_state_t), dimension(:), allocatable, intent(inout) :: state
     integer :: i, j, i_worker
     balancer%n_states = size (state)
@@ -286,23 +284,23 @@ contains
           i_worker = i_worker + 1
        end do
     end do
-  end subroutine request_balancer_add_state
+  end subroutine balancer_base_add_state
 
-  ! integer function request_balancer_get_resource_mode (balancer, worker_id) result (mode)
-  !   class(request_balancer_t), intent(in) :: balancer
+  ! integer function balancer_base_get_resource_mode (balancer, worker_id) result (mode)
+  !   class(balancer_base_t), intent(in) :: balancer
   !   integer, intent(in) :: worker_id
   !   integer :: partition_id, resource_id
   !   partition_id = balancer%worker(worker_id)%partition
   !   resource_id = balancer%worker(worker_id)%resource
   !   select case (balancer%partition(partition_id)%get_mode ())
   !   case (PARTITION_SINGLE)
-  !      mode = REQUEST_BALANCER_SINGLE
+  !      mode = BALANCER_BASE_SINGLE
   !   case (PARTITION_ALL)
-  !      mode = REQUEST_BALANCER_GROUP
+  !      mode = BALANCER_BASE_GROUP
   !   case default
   !      call msg_bug ("Balancer: Unkown partition mode.")
   !   end select
-  ! end function request_balancer_get_resource_mode
+  ! end function balancer_base_get_resource_mode
 
   !> Is a worker and has he a assignable resource.
   !!
@@ -310,27 +308,27 @@ contains
   !! (i) Is there still work in the associated partition?
   !! (ii) Is the worker already assigned? E.g. as part of a group and needs to retrieve its resources?
   !! Is either one of the cases true, the worker has an assignable resource.
-  pure logical function request_balancer_is_assignable (balancer, worker_id) result (flag)
-    class(request_balancer_t), intent(in) :: balancer
+  pure logical function balancer_base_is_assignable (balancer, worker_id) result (flag)
+    class(balancer_base_t), intent(in) :: balancer
     integer, intent(in) :: worker_id
     integer :: partition_id
     partition_id = balancer%worker(worker_id)%partition
     flag = balancer%worker(worker_id)%assigned .or. &
          balancer%state(partition_id)%has_resource ()
-  end function request_balancer_is_assignable
+  end function balancer_base_is_assignable
 
-  logical function request_balancer_is_pending (balancer) result (flag)
-    class(request_balancer_t), intent(in) :: balancer
+  logical function balancer_base_is_pending (balancer) result (flag)
+    class(balancer_base_t), intent(in) :: balancer
     flag = .not. all (balancer%state%has_resource ())
-  end function request_balancer_is_pending
+  end function balancer_base_is_pending
 
   !> Assign resource to a given worker or retrieve current assigned resource.
   !!
   !! If worker has already a resource assigned, return resource.
   !! If worker has not assigned a resource, retrieve new resource from state
   !! and apply to worker.
-  ! subroutine request_balancer_assign_worker (balancer, worker_id, resource_id)
-  !   class(request_balancer_t), intent(inout) :: balancer
+  ! subroutine balancer_base_assign_worker (balancer, worker_id, resource_id)
+  !   class(balancer_base_t), intent(inout) :: balancer
   !   integer, intent(in) :: worker_id
   !   integer, intent(out) :: resource_id
   !   integer :: partition_id
@@ -348,10 +346,10 @@ contains
   !        end select
   !     end if
   !   end associate
-  ! end subroutine request_balancer_assign_worker
+  ! end subroutine balancer_base_assign_worker
 
-  ! subroutine request_balancer_assign_worker_group (balancer, worker_id, resource_id)
-  !   class(request_balancer_t), intent(inout) :: balancer
+  ! subroutine balancer_base_assign_worker_group (balancer, worker_id, resource_id)
+  !   class(balancer_base_t), intent(inout) :: balancer
   !   integer, intent(in) :: resource_id
   !   integer, intent(in) :: worker_id
   !   integer, dimension(:), allocatable :: indices
@@ -372,11 +370,11 @@ contains
   !     !! Correct number of assigned workers.
   !     resource%n_assigned_workers = n_free_workers + 1
   !   end associate
-  ! end subroutine request_balancer_assign_worker_group
+  ! end subroutine balancer_base_assign_worker_group
 
   ! !> Idempotent.
-  ! subroutine request_balancer_free_worker (balancer, worker_id)
-  !   class(request_balancer_t), intent(inout) :: balancer
+  ! subroutine balancer_base_free_worker (balancer, worker_id)
+  !   class(balancer_base_t), intent(inout) :: balancer
   !   integer, intent(in) :: worker_id
   !   integer :: resource_id, partition_id
   !   if (.not. balancer%worker(worker_id)%assigned) return
@@ -390,10 +388,10 @@ contains
   !   case (PARTITION_ALL)
   !      call balancer%free_worker_group (resource_id)
   !   end select
-  ! end subroutine request_balancer_free_worker
+  ! end subroutine balancer_base_free_worker
 
-  ! subroutine request_balancer_free_worker_group (balancer, resource_id)
-  !   class(request_balancer_t), intent(inout) :: balancer
+  ! subroutine balancer_base_free_worker_group (balancer, resource_id)
+  !   class(balancer_base_t), intent(inout) :: balancer
   !   integer, intent(in) :: resource_id
   !   integer, dimension(:), allocatable :: indices
   !   integer :: i
@@ -401,6 +399,6 @@ contains
   !   do i = 1, size (indices)
   !      call balancer%worker(indices(i))%free ()
   !   end do
-  ! end subroutine request_balancer_free_worker_group
-end module request_balancer
+  ! end subroutine balancer_base_free_worker_group
+end module balancer_base
 
