@@ -1,6 +1,4 @@
-load_balancer = library('request', ['partition.f90',
-                                    'resources.f90',
-                                    'request_balancer.f90',
+load_balancer = library('request', ['balancer.f90',
                                     'balancer_simple.f90',
                                     'request_callback.f90',
                                     'request.f90',
