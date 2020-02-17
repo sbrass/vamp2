@@ -25,6 +25,7 @@ contains
     integer, intent(in) :: n_resources
     type(resource_state_t), dimension(:), allocatable :: state
     call balancer%base_init (n_workers, n_resources)
+    allocate (balancer%parallel_grid(n_resources), source = .false.)
     allocate (state (N_BALANCER_SIMPLE_STATES))
     call state(BALANCER_SIMPLE_CHANNEL)%init ( &
          mode = STATE_SINGLE, &

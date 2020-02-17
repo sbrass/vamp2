@@ -64,6 +64,7 @@ module balancer_base
      procedure :: write => balancer_base_write
      procedure :: base_init => balancer_base_base_init
      procedure :: add_state => balancer_base_add_state
+     procedure :: link_worker_and_state => balancer_base_link_worker_and_state
      procedure :: is_assignable => balancer_base_is_assignable
      procedure :: is_pending => balancer_base_is_pending
      procedure(balancer_base_has_resource_group), deferred :: has_resource_group
@@ -272,6 +273,14 @@ contains
     integer :: i, j, i_worker
     balancer%n_states = size (state)
     call move_alloc (state, balancer%state)
+    call balancer%link_worker_and_state ()
+  end subroutine balancer_base_add_state
+
+  subroutine balancer_base_link_worker_and_state (balancer)
+    class(balancer_base_t), intent(inout) :: balancer
+    integer :: i, j, i_worker
+    if (.not. allocated (balancer%state)) &
+         call msg_bug ("Error: resource state not allocated.")
     !! Link worker to a state.
     do i = 1, balancer%n_states
        i_worker = 1
@@ -284,23 +293,7 @@ contains
           i_worker = i_worker + 1
        end do
     end do
-  end subroutine balancer_base_add_state
-
-  ! integer function balancer_base_get_resource_mode (balancer, worker_id) result (mode)
-  !   class(balancer_base_t), intent(in) :: balancer
-  !   integer, intent(in) :: worker_id
-  !   integer :: partition_id, resource_id
-  !   partition_id = balancer%worker(worker_id)%partition
-  !   resource_id = balancer%worker(worker_id)%resource
-  !   select case (balancer%partition(partition_id)%get_mode ())
-  !   case (PARTITION_SINGLE)
-  !      mode = BALANCER_BASE_SINGLE
-  !   case (PARTITION_ALL)
-  !      mode = BALANCER_BASE_GROUP
-  !   case default
-  !      call msg_bug ("Balancer: Unkown partition mode.")
-  !   end select
-  ! end function balancer_base_get_resource_mode
+  end subroutine balancer_base_link_worker_and_state
 
   !> Is a worker and has he a assignable resource.
   !!
