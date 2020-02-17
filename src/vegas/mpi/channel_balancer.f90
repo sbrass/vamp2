@@ -1,36 +1,8 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
-
 module channel_balancer
   use kinds, only: default
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
-  use partition
-  use request_balancer
+
+  use balancer_base
 
   use diagnostics
 
@@ -40,11 +12,11 @@ module channel_balancer
 
   real(default), parameter :: BETA = 1.5_default
 
-  integer, parameter :: N_CHANNEL_BALANCER_PARTITIONS = 2, &
-       CHANNEL_PARTITION = 1, &
-       GRID_PARTITION = 2
+  integer, parameter :: N_CHANNEL_BALANCER_STATE = 2, &
+       CHANNEL_STATE = 1, &
+       GRID_STATE = 2
 
-  type, extends(request_balancer_t) :: channel_balancer_t
+  type, extends(balancer_base_t) :: channel_balancer_t
      private
      integer :: n_parallel_grids = 0
      integer :: n_parallel_channels = 0
@@ -54,27 +26,22 @@ module channel_balancer
    contains
      procedure :: init => channel_balancer_init
      procedure :: write => channel_balancer_write
-     procedure :: add_parallel_grid => channel_balancer_add_parallel_grid
-     procedure :: add_channel_weight => channel_balancer_add_channel_weight
-     procedure, private :: compute_mixed_resource_weight => &
-          channel_balancer_compute_mixed_resource_weight
+     procedure :: update_state => channel_balancer_update_state
+     procedure :: has_resource_group => channel_balancer_has_resource_group
+     procedure :: get_resource_group => channel_balancer_get_resource_group
+     procedure :: get_resource_master => channel_balancer_get_resource_master
+     procedure :: assign_worker => channel_balancer_assign_worker
+     procedure :: free_worker => channel_balancer_free_worker
   end type channel_balancer_t
 
   public :: channel_balancer_t
 contains
-  subroutine channel_balancer_init (balancer, n_workers, n_resources, skip_partition)
+  subroutine channel_balancer_init (balancer, n_workers, n_resources)
     class(channel_balancer_t), intent(out), target :: balancer
     integer, intent(in) :: n_workers
     integer, intent(in) :: n_resources
-    logical, intent(in), optional :: skip_partition !! ignore option
-    !! Basic init.
-    call balancer%request_balancer_t%init (n_workers, n_resources, &
-         skip_partition = .true.)
+    call balancer%base_init (n_workers, n_resources)
     allocate (balancer%parallel_grid(n_resources), source = .false.)
-    if (present (skip_partition)) then
-       call msg_bug ("Balancer: Skip partition option not supported.")
-    end if
-    !! Post-pone partition initialisation → add_channel_weight.
   end subroutine channel_balancer_init
 
   subroutine channel_balancer_write (balancer, unit)
@@ -88,120 +55,191 @@ contains
     write (u, "(A,1X,I3)") "Grid workers: ", balancer%n_grid_workers
     write (u, "(A,1X,I3)") "Channel workers: ", balancer%n_channel_workers
     write (u, *) balancer%parallel_grid
-    call balancer%request_balancer_t%write (u)
+    call balancer%write (u)
   end subroutine channel_balancer_write
 
-  subroutine channel_balancer_add_parallel_grid (balancer, parallel_grid)
-    class(channel_balancer_t), intent(inout) :: balancer
-    logical, dimension(:), intent(in) :: parallel_grid
-    if (size (parallel_grid) /= balancer%get_n_resources ()) then
-       call msg_bug ("Balancer: mismatch in size of parallel grid.")
-    end if
-    balancer%parallel_grid = parallel_grid
-  end subroutine channel_balancer_add_parallel_grid
-
-  !> Load balancing.
-  subroutine channel_balancer_add_channel_weight (balancer, weight)
+  subroutine channel_balancer_update_state (balancer, weight, parallel_grid)
     class(channel_balancer_t), intent(inout) :: balancer
     real(default), dimension(:), intent(in) :: weight
+    logical, dimension(:), intent(in) :: parallel_grid
     real(default) :: min_parallel_weight
-    real(default), dimension(:), allocatable :: resource_weight
-    min_parallel_weight = balancer%get_n_resources ()**(1._default - 1_default / BETA) &
-         / balancer%get_n_workers ()**BETA
+    balancer%parallel_grid = parallel_grid
+    min_parallel_weight = balancer%n_resources**(1._default - 1_default / BETA) &
+         / balancer%n_workers**BETA
     balancer%parallel_grid = &
          balancer%parallel_grid .and. (weight >= min_parallel_weight)
-    allocate (resource_weight(balancer%get_n_resources ()), source = 0._default)
-    if (balancer%get_n_resources () >= balancer%get_n_workers ()) then
+    if (balancer%n_resources >= balancer%n_workers) then
        !! Apply full multi-channel parallelization.
-       ! call msg_message ("Balancer: Apply full multi-channel parallelization")
        balancer%n_parallel_grids = 0
-       balancer%n_parallel_channels = balancer%get_n_resources ()
+       balancer%n_parallel_channels = balancer%n_resources
        balancer%parallel_grid = .false.
        balancer%n_grid_workers = 0
-       balancer%n_channel_workers = balancer%get_n_workers ()
-       resource_weight = 1
-       call balancer%add_resource_weight (resource_weight)
+       balancer%n_channel_workers = balancer%n_workers
     else
-       if (count (balancer%parallel_grid) == balancer%get_n_resources ()) then
+       if (count (balancer%parallel_grid) == balancer%n_resources) then
           !! Apply full VEGAS parallelization.
-          balancer%n_parallel_grids = balancer%get_n_resources ()
-          ! call msg_message ("Balancer: Apply full VEGAS parallelization")
+          balancer%n_parallel_grids = balancer%n_resources
           balancer%n_parallel_channels = 0
-          balancer%n_grid_workers = balancer%get_n_workers ()
+          balancer%n_grid_workers = balancer%n_workers
           balancer%n_channel_workers = 0
-          resource_weight = weight
-          call balancer%add_resource_weight (resource_weight)
        else
-          ! call msg_message ("Balancer: Apply mixed parallelization")
+          !! Apply mixed mode.
           balancer%n_parallel_grids = count (balancer%parallel_grid)
-          balancer%n_parallel_channels = balancer%get_n_resources () - balancer%n_parallel_grids
-          call balancer%compute_mixed_resource_weight (weight)
-          resource_weight = weight / sum(weight, balancer%parallel_grid)
-          where (balancer%parallel_grid)
-             resource_weight = resource_weight * balancer%n_grid_workers
-          elsewhere
-             resource_weight = 1._default
-          end where
-          call balancer%add_resource_weight (resource_weight)
+          balancer%n_parallel_channels = balancer%n_resources - balancer%n_parallel_grids
+          call compute_mixed_mode (weight)
        end if
     end if
-    call apply_partition ()
+    if(.not. allocated (balancer%state)) then
+       deallocate (balancer%state)
+    end if
+    call allocate_state ()
   contains
-    subroutine apply_partition ()
-      type(partition_t), dimension(:), allocatable :: partition
-      integer, dimension(:), allocatable :: map_channel_to_partition
-      ! call msg_message ("Allocate channel/grid partitions.")
-      allocate (partition(N_CHANNEL_BALANCER_PARTITIONS))
-      call partition(CHANNEL_PARTITION)%init ("Channel partition", PARTITION_SINGLE, balancer%n_channel_workers)
-      call partition(GRID_PARTITION)%init ("Grid partition", PARTITION_ALL, balancer%n_grid_workers)
-      map_channel_to_partition = merge (GRID_PARTITION, CHANNEL_PARTITION, balancer%parallel_grid)
-      call balancer%add_partition (partition, map_channel_to_partition)
-    end subroutine apply_partition
-  end subroutine channel_balancer_add_channel_weight
+    subroutine compute_mixed_mode (weight)
+      real(default), dimension(:), intent(in) :: weight
+      real(default) :: weight_parallel_grids, &
+           ratio_weight, &
+           ratio_n_channels, &
+           ratio
+      !! Apply mixed mode.
+      weight_parallel_grids = sum (weight, balancer%parallel_grid)
+      !! Overall normalization of weight, \f$\alpha_{\text{grids}} +
+      !! \alpha_{\text{channels}} = 1\f$.
+      !! \f$\alpha_{\text{channels}} = 1 - \alpha_{\text{grids}}\f$
+      ratio_weight = weight_parallel_grids / (1 - weight_parallel_grids)
+      ratio_n_channels = real (balancer%n_parallel_grids, default) &
+           / (balancer%n_resources - balancer%n_parallel_grids)
+      !! The average computation of channel is proportional to its weight.
+      !! Reweight number of channels (per mode) by their summed weights.
+      !! R = w * N / (w * N + w' * N'); primed refer to parallel grid entities.
+      !!   = 1 / (1 + w' / w * N' / N)
+      ratio = 1 / (1  + ratio_weight * ratio_n_channels)
+      ratio = min (max (ratio, 0.0_default), 1.0_default) !! Safe-guard ratio computation.
+      !! In the case of small numbers of workers and a very small ratio,
+      !! nint can assign no worker to channel/grid parallelization,
+      !! which is still requested by n_parallel_channels/grids.
+      !! In that case, we have to enforce: n_worker = n_channel_worker + n_grid_worker
+      balancer%n_channel_workers = nint (ratio * balancer%n_workers)
+      balancer%n_grid_workers = nint ((1 - ratio) * balancer%n_workers)
+      !! In the case of small numbers of workers and a very small ratio,
+      !! nint can assign no worker to channel/grid parallelization,
+      !! which is still requested by n_parallel_channels/grids.
+      !! In that case, we have to enforce: n_worker = n_channel_worker + n_grid_worker
+      if (balancer%n_workers >= 2 &
+           .AND. (balancer%n_parallel_channels > 0 .and. balancer%n_channel_workers < 1)) then
+         balancer%n_channel_workers = 1
+         balancer%n_grid_workers = balancer%n_grid_workers - 1
+      end if
+      !! The grid resources will only be increased to N = 2
+      !! if more than 3 workers are present.
+      if (balancer%n_workers >= 3 &
+           .AND. (balancer%n_parallel_grids > 0 .and. balancer%n_grid_workers < 2)) then
+         balancer%n_grid_workers = 2
+         balancer%n_channel_workers = balancer%n_channel_workers - 2
+      end if
+    end subroutine compute_mixed_mode
 
-  subroutine channel_balancer_compute_mixed_resource_weight (balancer, weight)
+    subroutine allocate_state ()
+      type(resource_state_t), dimension(:), allocatable :: state
+      integer :: ch
+      allocate (state(N_CHANNEL_BALANCER_STATE))
+      call state(CHANNEL_STATE)%init ( &
+           mode = STATE_SINGLE, &
+           n_workers = balancer%n_channel_workers)
+      call state(GRID_STATE)%init ( &
+           mode = STATE_ALL, &
+           n_workers = balancer%n_grid_workers)
+      do ch = 1, balancer%n_resources
+         if (balancer%parallel_grid(ch)) then
+            call state(GRID_STATE)%add_resource (ch)
+         else
+            call state(CHANNEL_STATE)%add_resource (ch)
+         end if
+      end do
+      call balancer%add_state (state)
+    end subroutine allocate_state
+  end subroutine channel_balancer_update_state
+
+  pure function channel_balancer_has_resource_group (balancer, resource_id) &
+       result (flag)
+    class(channel_balancer_t), intent(in) :: balancer
+    integer, intent(in) :: resource_id
+    logical :: flag
+    flag = balancer%parallel_grid(resource_id)
+  end function channel_balancer_has_resource_group
+
+  pure subroutine channel_balancer_get_resource_group (balancer, resource_id, group)
+    class(channel_balancer_t), intent(in) :: balancer
+    integer, intent(in) :: resource_id
+    integer, dimension(:), allocatable, intent(out) :: group
+    integer :: i
+    if (.not. balancer%has_resource_group (resource_id)) return
+    group = pack ([(i, i = 1, balancer%n_workers)], &
+         mask = balancer%worker%resource == resource_id)
+  end subroutine channel_balancer_get_resource_group
+
+  pure integer function channel_balancer_get_resource_master (balancer, resource_id) &
+       result (worker_id)
+    class(channel_balancer_t), intent(in) :: balancer
+    integer, intent(in) :: resource_id
+    integer :: i
+    !! Linear search.
+    !! First element in worker group is defined as master.
+    associate (worker => balancer%worker)
+      do i = 1, balancer%n_workers
+         if (worker(i)%resource == resource_id) then
+            worker_id = i
+            exit
+         end if
+      end do
+    end associate
+  end function channel_balancer_get_resource_master
+
+  subroutine channel_balancer_assign_worker (balancer, worker_id, resource_id)
     class(channel_balancer_t), intent(inout) :: balancer
-    real(default), dimension(:), intent(in) :: weight
-    real(default) :: weight_parallel_grids, &
-         ratio_weight, &
-         ratio_n_channels, &
-         ratio
-    !! Apply mixed mode.
-    weight_parallel_grids = sum (weight, balancer%parallel_grid)
-    !! Overall normalization of weight, \f$\alpha_{\text{grids}} +
-    !! \alpha_{\text{channels}} = 1\f$.
-    !! \f$\alpha_{\text{channels}} = 1 - \alpha_{\text{grids}}\f$
-    ratio_weight = weight_parallel_grids / (1 - weight_parallel_grids)
-    ratio_n_channels = real (balancer%n_parallel_grids, default) &
-         / (balancer%get_n_resources () - balancer%n_parallel_grids)
-    !! The average computation of channel is proportional to its weight.
-    !! Reweight number of channels (per mode) by their summed weights.
-    !! R = w * N / (w * N + w' * N'); primed refer to parallel grid entities.
-    !!   = 1 / (1 + w' / w * N' / N)
-    ratio = 1 / (1  + ratio_weight * ratio_n_channels)
-    ratio = min (max (ratio, 0.0_default), 1.0_default) !! Safe-guard ratio computation.
-    !! In the case of small numbers of workers and a very small ratio,
-    !! nint can assign no worker to channel/grid parallelization,
-    !! which is still requested by n_parallel_channels/grids.
-    !! In that case, we have to enforce: n_worker = n_channel_worker + n_grid_worker
-    balancer%n_channel_workers = nint (ratio * balancer%get_n_workers ())
-    balancer%n_grid_workers = nint ((1 - ratio) * balancer%get_n_workers ())
-    !! In the case of small numbers of workers and a very small ratio,
-    !! nint can assign no worker to channel/grid parallelization,
-    !! which is still requested by n_parallel_channels/grids.
-    !! In that case, we have to enforce: n_worker = n_channel_worker + n_grid_worker
-    if (balancer%get_n_workers () >= 2 &
-         .AND. (balancer%n_parallel_channels > 0 .and. balancer%n_channel_workers < 1)) then
-       balancer%n_channel_workers = 1
-       balancer%n_grid_workers = balancer%n_grid_workers - 1
+    integer, intent(in) :: worker_id
+    integer, intent(out) :: resource_id
+    integer :: i_state, i
+    if (balancer%worker(worker_id)%assigned) then
+       resource_id = balancer%worker(worker_id)%resource
+       return
     end if
-    !! The grid resources will only be increased to N = 2
-    !! if more than 3 workers are present.
-    if (balancer%get_n_workers () >= 3 &
-         .AND. (balancer%n_parallel_grids > 0 .and. balancer%n_grid_workers < 2)) then
-       balancer%n_grid_workers = 2
-       balancer%n_channel_workers = balancer%n_channel_workers - 2
-    end if
-  end subroutine channel_balancer_compute_mixed_resource_weight
-end module channel_balancer
+    associate (state => balancer%state)
+      i_state = balancer%worker(worker_id)%partition
+      if (.not. state(i_state)%has_resource ()) then
+         resource_id = 0
+         return
+      end if
+      resource_id = state(i_state)%assign_resource ()
+      select case (state(i_state)%mode)
+      case (STATE_SINGLE)
+         call balancer%worker(worker_id)%add_resource (resource_id)
+      case (STATE_ALL)
+         do i = 1, balancer%n_workers
+            if (.not. balancer%worker(i)%partition == i_state) cycle
+            call balancer%worker%add_resource (resource_id)
+         end do
+      end select
+    end associate
+  end subroutine channel_balancer_assign_worker
 
+  subroutine channel_balancer_free_worker (balancer, worker_id)
+    class(channel_balancer_t), intent(inout) :: balancer
+    integer, intent(in) :: worker_id
+    integer :: i, i_state, resource_id
+    if (.not. balancer%worker(worker_id)%assigned) return
+    associate (state => balancer%state)
+      i_state = balancer%worker(worker_id)%partition
+      resource_id = balancer%worker(worker_id)%resource
+      call state(i_state)%free_resource (resource_id)
+      select case (state(i_state)%mode)
+      case (STATE_SINGLE)
+         call balancer%worker(worker_id)%free ()
+      case (STATE_ALL)
+         do i = 1, balancer%n_workers
+            if (.not. balancer%worker(i)%partition == i_state) cycle
+            call balancer%worker(i)%free ()
+         end do
+      end select
+    end associate
+  end subroutine channel_balancer_free_worker
+end module channel_balancer

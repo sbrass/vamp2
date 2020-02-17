@@ -132,7 +132,7 @@ contains
          "ASSIGNED", worker%assigned
   end subroutine worker_write
 
-  subroutine worker_add_resource (worker, resource_id)
+  elemental subroutine worker_add_resource (worker, resource_id)
     class(worker_t), intent(inout) :: worker
     integer, intent(in) :: resource_id
     worker%n_resources = worker%n_resources + 1
@@ -270,7 +270,6 @@ contains
   subroutine balancer_base_add_state (balancer, state)
     class(balancer_base_t), intent(inout) :: balancer
     type(resource_state_t), dimension(:), allocatable, intent(inout) :: state
-    integer :: i, j, i_worker
     balancer%n_states = size (state)
     call move_alloc (state, balancer%state)
     call balancer%link_worker_and_state ()
