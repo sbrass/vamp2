@@ -140,6 +140,10 @@ contains
       resource_id = state%assign_resource ()
       if (balancer%parallel_grid(resource_id)) then
          do i = 1, balancer%n_workers
+            if (balancer%is_worker_pending (i)) then
+               write (msg_buffer, "(A,1X,I0,1X,A,1X,I0,1X,A)") "WORKER", i, "ASSIGNED"
+               call msg_bug ()
+            end if
             call balancer%worker(i)%add_resource (resource_id)
          end do
          call balancer%resource(resource_id)%set_active (n_workers = balancer%n_workers)

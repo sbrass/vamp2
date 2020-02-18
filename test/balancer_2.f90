@@ -43,8 +43,10 @@ program main
      write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 4, handler
      call balancer%assign_worker (worker_id = 5, resource_id = handler)
      write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 5, handler
+
+     call balancer%write (ERROR_UNIT)
+
      !! Free all workers.
-     call balancer%write ()
      call balancer%free_worker(worker_id = 5)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 5
      call balancer%free_worker(worker_id = 2)

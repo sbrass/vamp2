@@ -198,7 +198,7 @@ contains
     class(channel_balancer_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
     integer, intent(out) :: resource_id
-    integer :: i_state, i
+    integer :: i_state
     if (balancer%worker(worker_id)%assigned) then
        resource_id = balancer%worker(worker_id)%resource
        return
