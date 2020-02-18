@@ -22,9 +22,12 @@ module balancer_base
 
   type :: resource_t
      integer :: resource_id = 0
+     logical :: active = .false.
      integer :: n_assigned_workers = 0
    contains
      procedure :: write => resource_write
+     procedure :: set_active => resource_set_active
+     procedure :: set_inactive => resource_set_inactive
   end type resource_t
 
   integer, parameter, public :: STATE_SINGLE = 1, &
@@ -67,6 +70,7 @@ module balancer_base
      procedure :: add_state => balancer_base_add_state
      procedure :: link_worker_and_state => balancer_base_link_worker_and_state
      procedure :: is_assignable => balancer_base_is_assignable
+     procedure :: is_worker_pending => balancer_base_is_worker_pending
      procedure :: is_pending => balancer_base_is_pending
      procedure(balancer_base_has_resource_group), deferred :: has_resource_group
      procedure(balancer_base_get_resource_group), deferred :: get_resource_group
@@ -158,10 +162,23 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
-    write (u, "(A,1X,I3,1X,A,1X,I3)") &
+    write (u, "(A,1X,I3,1X,A,1X,L1,1X,A,1X,I3)") &
          "RESOURCE_ID", resource%resource_id, &
+         "ACTIVE", resource%active, &
          "N_ASSIGNED_WORKERS", resource%n_assigned_workers
   end subroutine resource_write
+
+  subroutine resource_set_active (resource, n_workers)
+    class(resource_t), intent(inout) :: resource
+    integer, intent(in) :: n_workers
+    resource%active = .true.
+    resource%n_assigned_workers = n_workers
+  end subroutine resource_set_active
+
+  subroutine resource_set_inactive (resource)
+    class(resource_t), intent(inout) :: resource
+    resource%active = .false.
+  end subroutine resource_set_inactive
 
   subroutine resource_state_write (state, unit)
     class(resource_state_t), intent(in) :: state
@@ -268,6 +285,14 @@ contains
     balancer%n_resources = n_resources
     allocate (balancer%worker (n_workers))
     allocate (balancer%resource (n_resources))
+    call init_resource ()
+  contains
+    subroutine init_resource ()
+      integer :: i
+      do i = 1, balancer%n_resources
+         balancer%resource(i)%resource_id = i
+      end do
+    end subroutine init_resource
   end subroutine balancer_base_base_init
 
   !> Add partition of workers and link with workers.
@@ -315,6 +340,20 @@ contains
     flag = balancer%worker(worker_id)%assigned .or. &
          balancer%state(partition_id)%has_resource ()
   end function balancer_base_is_assignable
+
+  !> Is a worker still pending.
+  !!
+  !! Test worker assignment, and if there is a (valid) resource and if it is still active.
+  pure logical function balancer_base_is_worker_pending (balancer, worker_id) result (flag)
+    class(balancer_base_t), intent(in) :: balancer
+    integer, intent(in) :: worker_id
+    integer :: resource_id
+    flag = balancer%worker(worker_id)%assigned
+    if (flag) then
+       resource_id = balancer%worker(worker_id)%resource
+       flag = balancer%resource(resource_id)%active
+    end if
+  end function balancer_base_is_worker_pending
 
   logical function balancer_base_is_pending (balancer) result (flag)
     class(balancer_base_t), intent(in) :: balancer
