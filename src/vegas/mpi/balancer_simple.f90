@@ -10,6 +10,15 @@ module balancer_simple
   integer, parameter :: N_BALANCER_SIMPLE_STATES = 1, &
        BALANCER_SIMPLE_CHANNEL = 1
 
+  !> Simple balancer.
+  !!
+  !! The simple balancer distribute the channel among the N workers using a modulo prescription.
+  !! However, it does assign all workers to a channel capable of grid with parallelizable structure.
+  !!
+  !! The balancer use local, non-communicative approach; each worker allocates an own instance of the balancer
+  !! and fills it with the respecting resources.
+  !!
+  !! We defer possible checks (or sentinels) to the request module, e.g. such as checking whether all channels are computed globally.
   type, extends (balancer_base_t) :: balancer_simple_t
      logical, dimension(:), allocatable :: parallel_grid
    contains
@@ -38,9 +47,22 @@ contains
     call balancer%add_state (state)
   end subroutine balancer_simple_init
 
-  subroutine balancer_simple_update_state (balancer, rank, parallel_grid)
+  subroutine balancer_simple_write (balancer, unit)
+    class(balancer_simple_t), intent(in) :: balancer
+    integer, intent(in), optional :: unit
+    integer :: u, n_size
+    u = ERROR_UNIT; if (present (unit)) u = unit
+    call balancer%base_write (u)
+    n_size = min (25, size (balancer%parallel_grid))
+    write (u, "(A,25(1X,L1))") "Parallel Grids:", balancer%parallel_grid(:n_size)
+  end subroutine balancer_simple_write
+
+  !> Update balancer state.
+  !!
+  !! Each worker update its own balancer state requiring information about the worker_id.
+  subroutine balancer_simple_update_state (balancer, worker_id, parallel_grid)
     class(balancer_simple_t), intent(inout) :: balancer
-    integer, intent(in) :: rank
+    integer, intent(in) :: worker_id
     logical, dimension(:), intent(in) :: parallel_grid
     integer :: ch, worker
     balancer%parallel_grid = parallel_grid
@@ -54,7 +76,7 @@ contains
             call state%add_resource (ch)
          else
             worker = balancer%map_channel_to_worker (ch)
-            if (worker == rank) then
+            if (worker == worker_id) then
                call state%add_resource (ch)
             end if
          end if
@@ -95,7 +117,10 @@ contains
        result (worker)
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in) :: channel
-    worker = mod (channel - 1, balancer%n_workers)
+    !! Proof: channel ∈ {1, N_c}, number of workers N, rank ∈ {0, …, N - 1}
+    !! Proof: worker ∈ {1, …, N}
+    !! a = b mod c, then 0 ≤ a < c
+    worker = mod (channel - 1, balancer%n_workers) + 1
   end function balancer_simple_map_channel_to_worker
 
   subroutine balancer_simple_assign_worker (balancer, worker_id, resource_id)
