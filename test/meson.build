@@ -1,6 +1,7 @@
 unit_test = find_program('unit_test.py')
 
-test_utils = library('test_utils', 'test_utils.f90')
+test_utils = library('test_utils', 'test_utils.f90',
+                    link_with : utils)
 result_handler = library('result_handler', 'result_handler.f90',
                          link_with : load_balancer)
 
@@ -31,7 +32,11 @@ mpi_caller_4 = executable('mpi_caller_4', 'mpi_caller_4.f90',
                                        test_utils],
                           link_language : 'fortran')
 balancer_1 = executable('balancer_1', 'balancer_1.f90',
-                        link_with : load_balancer)
+                        link_with : [load_balancer,
+                                     utils,
+                                     test_utils,
+                                     signal],
+                        link_language : 'fortran')
 balancer_2 = executable('balancer_2', 'balancer_2.f90',
                         link_with : [load_balancer])
 channel_1 = executable('channel_1', 'channel_1.f90',
