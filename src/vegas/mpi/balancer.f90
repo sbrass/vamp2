@@ -318,7 +318,7 @@ contains
 
   logical function balancer_base_is_pending (balancer) result (flag)
     class(balancer_base_t), intent(in) :: balancer
-    flag = .not. all (balancer%state%has_resource ())
+    flag = all (balancer%state%has_resource ())
   end function balancer_base_is_pending
 
   !> Assign resource to a given worker or retrieve current assigned resource.
