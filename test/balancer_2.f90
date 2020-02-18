@@ -1,35 +1,61 @@
-!! Skip partition during initialization and add partition later.
+!> Test channel_balancer_t implementation.
 program main
   use iso_fortran_env, only: ERROR_UNIT, &
        r64 => REAL64
 
-  use partition
-  use request_balancer
+  use kinds, only: default
+
+  use balancer_base
+  use channel_balancer
 
   implicit none
 
-  type(request_balancer_t) :: balancer
+  class(balancer_base_t), allocatable :: balancer
 
-  integer, parameter :: N_WORKERS = 2, &
-       N_RESOURCES = 2
-  type(partition_t), dimension(:), allocatable :: partition
-  integer, dimension(N_WORKERS) :: map = [2, 1]
+  integer, parameter :: N_RESOURCES = 4, &
+       N_WORKERS = 5
+  logical, dimension(N_RESOURCES) :: parallel_grid = .false.
+  real(default), dimension(N_RESOURCES) :: weight = 0
 
-  call balancer%init (n_workers = n_workers, n_resources = n_resources, skip_partition = .true.)
+  integer :: worker, handler
 
-  allocate (partition(2))
-  call partition(1)%init ("External partition SINGLE.", PARTITION_SINGLE, 1)
-  call partition(2)%init ("External partition ALL.", PARTITION_ALL, 1)
-  call balancer%add_partition (partition, map)
+  weight = [1, 1, 8, 3]
+  weight = weight / sum (weight)
+  parallel_grid(3) = .true.
 
+  allocate (channel_balancer_t :: balancer)
+  select type (balancer)
+  type is (channel_balancer_t)
+     call balancer%init (n_workers = n_workers, n_resources = n_resources)
+     call balancer%update_state (weight, parallel_grid)
+  end select
   call balancer%write (ERROR_UNIT)
 
-  ! call balancer%assign_worker (1, i_resource)
-  ! write (ERROR_UNIT, *) "ASSIGN WORKER", 1, "TO", i_resource
-  ! call balancer%assign_worker (2, i_resource)
-  ! write (ERROR_UNIT, *) "ASSIGN WORKER", 2, "TO", i_resource
-  ! call balancer%free_worker (2)
-  ! write (ERROR_UNIT, *) "FREE WORKER", 2
-  ! call balancer%free_worker (1)
-  ! write (ERROR_UNIT, *) "FREE WORKER", 1
+  do while (balancer%is_pending ())
+     !! Assign all workers.
+     call balancer%assign_worker (worker_id = 3, resource_id = handler)
+     write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 3, handler
+     call balancer%assign_worker (worker_id = 2, resource_id = handler)
+     write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 2, handler
+     call balancer%assign_worker (worker_id = 1, resource_id = handler)
+     write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 1, handler
+     call balancer%assign_worker (worker_id = 4, resource_id = handler)
+     write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 4, handler
+     call balancer%assign_worker (worker_id = 5, resource_id = handler)
+     write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "BALANCER", 5, handler
+     !! Free all workers.
+     call balancer%write ()
+     call balancer%free_worker(worker_id = 5)
+     write (ERROR_UNIT, "(A,1X,I0)") "FREE", 5
+     call balancer%free_worker(worker_id = 2)
+     write (ERROR_UNIT, "(A,1X,I0)") "FREE", 2
+     call balancer%free_worker(worker_id = 1)
+     write (ERROR_UNIT, "(A,1X,I0)") "FREE", 1
+     call balancer%free_worker(worker_id = 3)
+     write (ERROR_UNIT, "(A,1X,I0)") "FREE", 3
+     call balancer%free_worker(worker_id = 4)
+     write (ERROR_UNIT, "(A,1X,I0)") "FREE", 4
+  end do
+
+  call balancer%write (ERROR_UNIT)
 end program main
