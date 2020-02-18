@@ -288,8 +288,8 @@ contains
     if (.not. allocated (balancer%state)) &
          call msg_bug ("Error: resource state not allocated.")
     !! Link worker to a state.
+    i_worker = 1
     do i = 1, balancer%n_states
-       i_worker = 1
        do j = 1, balancer%state(i)%n_workers
           if (i_worker > balancer%n_workers) then
              call msg_bug ("Balancer: Number of state workers&
