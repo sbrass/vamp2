@@ -1,5 +1,9 @@
 module balancer_simple
+  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
+
   use balancer_base
+
+  use diagnostics
 
   implicit none
 
@@ -10,6 +14,7 @@ module balancer_simple
      logical, dimension(:), allocatable :: parallel_grid
    contains
      procedure :: init => balancer_simple_init
+     procedure :: write => balancer_simple_write
      procedure :: update_state => balancer_simple_update_state
      procedure :: has_resource_group => balancer_simple_has_resource_group
      procedure :: get_resource_group => balancer_simple_get_resource_group

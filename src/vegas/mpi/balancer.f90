@@ -61,7 +61,8 @@ module balancer_base
      type(resource_t), dimension(:), allocatable :: resource
      type(resource_state_t), dimension(:), allocatable :: state
    contains
-     procedure :: write => balancer_base_write
+     procedure :: base_write => balancer_base_write
+     procedure(balancer_base_deferred_write), deferred :: write
      procedure :: base_init => balancer_base_base_init
      procedure :: add_state => balancer_base_add_state
      procedure :: link_worker_and_state => balancer_base_link_worker_and_state
@@ -75,6 +76,12 @@ module balancer_base
   end type balancer_base_t
 
   abstract interface
+     subroutine balancer_base_deferred_write (balancer, unit)
+       import :: balancer_base_t
+       class(balancer_base_t), intent(in) :: balancer
+       integer, intent(in), optional :: unit
+     end subroutine balancer_base_deferred_write
+
      !> Pure forbids any MPI intrusion!!
      pure logical function balancer_base_has_resource_group (balancer, resource_id) &
           result (flag)
