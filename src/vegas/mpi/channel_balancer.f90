@@ -55,7 +55,7 @@ contains
     write (u, "(A,1X,I3)") "Grid workers: ", balancer%n_grid_workers
     write (u, "(A,1X,I3)") "Channel workers: ", balancer%n_channel_workers
     write (u, *) balancer%parallel_grid
-    call balancer%write (u)
+    call balancer%base_write (u)
   end subroutine channel_balancer_write
 
   subroutine channel_balancer_update_state (balancer, weight, parallel_grid)
@@ -89,7 +89,7 @@ contains
           call compute_mixed_mode (weight)
        end if
     end if
-    if(.not. allocated (balancer%state)) then
+    if(allocated (balancer%state)) then
        deallocate (balancer%state)
     end if
     call allocate_state ()
