@@ -142,8 +142,10 @@ contains
          do i = 1, balancer%n_workers
             call balancer%worker(i)%add_resource (resource_id)
          end do
+         call balancer%resource(resource_id)%set_active (n_workers = balancer%n_workers)
       else
          call balancer%worker(worker_id)%add_resource (resource_id)
+         call balancer%resource(resource_id)%set_active (n_workers = 1)
       end if
     end associate
   end subroutine balancer_simple_assign_worker
@@ -156,6 +158,7 @@ contains
     if (.not. balancer%worker(worker_id)%assigned) return
     associate (state => balancer%state(BALANCER_SIMPLE_CHANNEL))
       resource_id = balancer%worker(worker_id)%resource
+      call balancer%resource(resource_id)%set_inactive ()
       call state%free_resource (resource_id)
       if (balancer%parallel_grid(resource_id)) then
          do i = 1, balancer%n_workers

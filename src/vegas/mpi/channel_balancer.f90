@@ -213,13 +213,31 @@ contains
       select case (state(i_state)%mode)
       case (STATE_SINGLE)
          call balancer%worker(worker_id)%add_resource (resource_id)
+         call balancer%resource(resource_id)%set_active (n_workers = 1)
       case (STATE_ALL)
-         do i = 1, balancer%n_workers
-            if (.not. balancer%worker(i)%partition == i_state) cycle
-            call balancer%worker%add_resource (resource_id)
-         end do
+         call fill_resource_group (i_state, resource_id)
       end select
     end associate
+  contains
+    subroutine fill_resource_group (i_state, resource_id)
+      integer, intent(in) :: i_state
+      integer, intent(in) :: resource_id
+      integer :: i, n_workers
+      n_workers = 0
+      do i = 1, balancer%n_workers
+         if (.not. balancer%worker(i)%partition == i_state) cycle
+         if (balancer%is_worker_pending (i)) then
+            write (msg_buffer, "(A,1X,I0,1X,A,1X,I0,1X,A)") "WORKER", i, "STATE", i_state, "ASSIGNED"
+            call msg_bug ()
+         end if
+         call balancer%worker(i)%add_resource (resource_id)
+         n_workers = n_workers + 1
+      end do
+      if (n_workers /= balancer%state(i_state)%n_workers) then
+         call msg_bug ("Number of assigned workers unequal to number of state workers.")
+      end if
+      call balancer%resource(resource_id)%set_active (n_workers = n_workers)
+    end subroutine fill_resource_group
   end subroutine channel_balancer_assign_worker
 
   subroutine channel_balancer_free_worker (balancer, worker_id)
@@ -230,6 +248,7 @@ contains
     associate (state => balancer%state)
       i_state = balancer%worker(worker_id)%partition
       resource_id = balancer%worker(worker_id)%resource
+      call balancer%resource(resource_id)%set_inactive ()
       call state(i_state)%free_resource (resource_id)
       select case (state(i_state)%mode)
       case (STATE_SINGLE)
