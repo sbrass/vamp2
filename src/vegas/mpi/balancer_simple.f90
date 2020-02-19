@@ -99,7 +99,7 @@ contains
     integer :: i
     if (.not. balancer%has_resource_group (resource_id)) return
     group = pack ([(i, i=1,balancer%n_workers)], &
-         mask = balancer%worker%resource == resource_id)
+         mask = balancer%worker%get_resource () == resource_id)
   end subroutine balancer_simple_get_resource_group
 
   pure integer function balancer_simple_get_resource_master (balancer, resource_id) &
@@ -128,8 +128,8 @@ contains
     integer, intent(in) :: worker_id
     integer, intent(out) :: resource_id
     integer :: i
-    if (balancer%worker(worker_id)%assigned) then
-       resource_id = balancer%worker(worker_id)%resource
+    if (balancer%worker(worker_id)%is_assigned ()) then
+       resource_id = balancer%worker(worker_id)%get_resource ()
        RETURN
     end if
     associate (state => balancer%state(BALANCER_SIMPLE_CHANNEL))
@@ -159,9 +159,9 @@ contains
     integer, intent(in) :: worker_id
     integer :: resource_id
     integer :: i
-    if (.not. balancer%worker(worker_id)%assigned) return
+    if (.not. balancer%worker(worker_id)%is_assigned ()) return
     associate (state => balancer%state(BALANCER_SIMPLE_CHANNEL))
-      resource_id = balancer%worker(worker_id)%resource
+      resource_id = balancer%worker(worker_id)%get_resource ()
       call balancer%resource(resource_id)%set_inactive ()
       call state%free_resource (resource_id)
       if (balancer%parallel_grid(resource_id)) then

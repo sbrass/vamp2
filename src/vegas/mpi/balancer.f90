@@ -10,12 +10,16 @@ module balancer_base
   private
 
   type :: worker_t
+     private
      integer :: resource = 0
-     integer :: partition = 0
+     integer :: state = 0
      integer :: n_resources = 0
      logical :: assigned = .false.
    contains
      procedure :: write => worker_write
+     procedure :: is_assigned => worker_is_assigned
+     procedure :: get_resource => worker_get_resource
+     procedure :: get_state => worker_get_state
      procedure :: add_resource => worker_add_resource
      procedure :: free => worker_free
   end type worker_t
@@ -66,11 +70,11 @@ module balancer_base
      type(resource_t), dimension(:), allocatable :: resource
      type(resource_state_t), dimension(:), allocatable :: state
    contains
+     procedure :: base_init => balancer_base_base_init
      procedure :: base_write => balancer_base_write
      procedure(balancer_base_deferred_write), deferred :: write
-     procedure :: base_init => balancer_base_base_init
      procedure :: add_state => balancer_base_add_state
-     procedure :: link_worker_and_state => balancer_base_link_worker_and_state
+     procedure, private :: link_worker_and_state => balancer_base_link_worker_and_state
      procedure :: is_assignable => balancer_base_is_assignable
      procedure :: is_worker_pending => balancer_base_is_worker_pending
      procedure :: is_pending => balancer_base_is_pending
@@ -123,6 +127,8 @@ module balancer_base
      !!
      !! If worker has already a resource assigned, return resource.
      !! If worker has not been assigned a resource, retrieve new resource from state.
+     !!
+     !! \note Each call must check if a worker is assignable, if not, the procedure must return resource_id = -1.
      subroutine balancer_base_assign_worker (balancer, worker_id, resource_id)
        import :: balancer_base_t
        class(balancer_base_t), intent(inout) :: balancer
@@ -149,10 +155,25 @@ contains
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
     write (u, "(3(A,1X,I3,1X),A,1X,L1)") "RESOURCE", worker%resource, &
-         "PARTITION", worker%partition, &
+         "STATE", worker%state, &
          "N_RESOURCES", worker%n_resources, &
          "ASSIGNED", worker%assigned
   end subroutine worker_write
+
+  elemental logical function worker_is_assigned (worker) result (flag)
+    class(worker_t), intent(in) :: worker
+    flag = worker%assigned
+  end function worker_is_assigned
+
+  elemental integer function worker_get_resource (worker) result (resource_id)
+    class(worker_t), intent(in) :: worker
+    resource_id = worker%resource
+  end function worker_get_resource
+
+  elemental integer function worker_get_state (worker) result (i_state)
+    class(worker_t), intent(in) :: worker
+    i_state = worker%state
+  end function worker_get_state
 
   elemental subroutine worker_add_resource (worker, resource_id)
     class(worker_t), intent(inout) :: worker
@@ -336,25 +357,31 @@ contains
              call msg_bug ("Balancer: Number of state workers&
                   & exceeding global number of workers")
           end if
-          balancer%worker(i_worker)%partition = i
+          balancer%worker(i_worker)%state = i
           i_worker = i_worker + 1
        end do
     end do
   end subroutine balancer_base_link_worker_and_state
 
-  !> Is a worker and has he a assignable resource.
+  !> Is a worker unassigned, or is a worker assigned, but already assigned to an active resource?
   !!
-  !! The answer depends on two factors:
-  !! (i) Is there still work in the associated partition?
-  !! (ii) Is the worker already assigned? E.g. as part of a group and needs to retrieve its resources?
-  !! Is either one of the cases true, the worker has an assignable resource.
+  !! \note Fence for assign_worker TBP.
+  !! The assign_worker TPB must call is_assignable in order to retrieve the worker status.
+  !! \param[in] worker_id
+  !! \return flag If worker is NOT assigned, return .true. if state has resources.
+  !!              If worker is assigned, return .true. if associated resource is active.
   pure logical function balancer_base_is_assignable (balancer, worker_id) result (flag)
     class(balancer_base_t), intent(in) :: balancer
     integer, intent(in) :: worker_id
-    integer :: partition_id
-    partition_id = balancer%worker(worker_id)%partition
-    flag = balancer%worker(worker_id)%assigned .or. &
-         balancer%state(partition_id)%has_resource ()
+    integer :: i_state, resource_id
+    flag = .false.
+    if (balancer%worker(worker_id)%assigned) then
+       resource_id = balancer%worker(worker_id)%resource
+       flag = balancer%resource(resource_id)%is_active ()
+    else
+       i_state = balancer%worker(worker_id)%get_state ()
+       flag = balancer%state(i_state)%has_resource ()
+    end if
   end function balancer_base_is_assignable
 
   !> Is a worker still pending.
@@ -366,8 +393,8 @@ contains
     integer :: resource_id
     flag = balancer%worker(worker_id)%assigned
     if (flag) then
-       resource_id = balancer%worker(worker_id)%resource
-       flag = balancer%resource(resource_id)%active
+       resource_id = balancer%worker(worker_id)%get_resource ()
+       flag = balancer%resource(resource_id)%is_active ()
     end if
   end function balancer_base_is_worker_pending
 
