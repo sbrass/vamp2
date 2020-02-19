@@ -21,11 +21,13 @@ module balancer_base
   end type worker_t
 
   type :: resource_t
+     private
      integer :: resource_id = 0
      logical :: active = .false.
      integer :: n_assigned_workers = 0
    contains
      procedure :: write => resource_write
+     procedure :: is_active => resource_is_active
      procedure :: set_active => resource_set_active
      procedure :: set_inactive => resource_set_inactive
   end type resource_t
@@ -167,6 +169,11 @@ contains
          "ACTIVE", resource%active, &
          "N_ASSIGNED_WORKERS", resource%n_assigned_workers
   end subroutine resource_write
+
+  elemental function resource_is_active (resource) result (flag)
+    class(resource_t), intent(in) :: resource
+    flag = resource%active
+  end function resource_is_active
 
   subroutine resource_set_active (resource, n_workers)
     class(resource_t), intent(inout) :: resource
