@@ -136,6 +136,10 @@ contains
     integer, intent(in) :: worker_id
     integer, intent(out) :: resource_id
     integer :: i
+    if (.not. balancer%is_assignable (worker_id)) then
+       resource_id = -1
+       RETURN
+    end if
     if (balancer%worker(worker_id)%is_assigned ()) then
        resource_id = balancer%worker(worker_id)%get_resource ()
        RETURN
