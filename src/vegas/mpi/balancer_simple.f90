@@ -89,6 +89,10 @@ contains
        result (flag)
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
+    if (.not. balancer%resource(resource_id)%is_active ()) then
+       flag = .false.
+       return
+    end if
     flag = balancer%parallel_grid (resource_id)
   end function balancer_simple_has_resource_group
 
@@ -103,13 +107,17 @@ contains
   end subroutine balancer_simple_get_resource_group
 
   pure integer function balancer_simple_get_resource_master (balancer, resource_id) &
-       result (worker)
+       result (worker_id)
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
+    if (.not. balancer%resource(resource_id)%is_active ()) then
+       worker_id = -1
+       return
+    end if
     if (balancer%parallel_grid(resource_id)) then
-       worker = 0
+       worker_id = 1
     else
-       worker = balancer%map_channel_to_worker (resource_id)
+       worker_id = balancer%map_channel_to_worker (resource_id)
     end if
   end function balancer_simple_get_resource_master
 
