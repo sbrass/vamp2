@@ -47,14 +47,15 @@ contains
   subroutine channel_balancer_write (balancer, unit)
     class(channel_balancer_t), intent(in) :: balancer
     integer, intent(in), optional :: unit
-    integer :: u
+    integer :: u, n_size
     u = ERROR_UNIT; if (present (unit)) u = unit
     write (u, "(A)") "Channel Balancer."
     write (u, "(A,1X,I3)") "Parallel grids: ", balancer%n_parallel_grids
     write (u, "(A,1X,I3)") "Parallel channels: ", balancer%n_parallel_channels
     write (u, "(A,1X,I3)") "Grid workers: ", balancer%n_grid_workers
     write (u, "(A,1X,I3)") "Channel workers: ", balancer%n_channel_workers
-    write (u, *) balancer%parallel_grid
+    n_size = min (25, size (balancer%parallel_grid))
+    write (u, "(A,25(1X,L1))") "Parallel Grids:", balancer%parallel_grid(:n_size)
     call balancer%base_write (u)
   end subroutine channel_balancer_write
 
@@ -155,6 +156,8 @@ contains
             call state(CHANNEL_STATE)%add_resource (ch)
          end if
       end do
+      call state(CHANNEL_STATE)%freeze ()
+      call state(GRID_STATE)%freeze ()
       call balancer%add_state (state)
     end subroutine allocate_state
   end subroutine channel_balancer_update_state
@@ -164,6 +167,10 @@ contains
     class(channel_balancer_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
     logical :: flag
+    if (.not. balancer%resource(resource_id)%is_active ()) then
+       flag = .false.
+       return
+    end if
     flag = balancer%parallel_grid(resource_id)
   end function channel_balancer_has_resource_group
 
@@ -174,7 +181,7 @@ contains
     integer :: i
     if (.not. balancer%has_resource_group (resource_id)) return
     group = pack ([(i, i = 1, balancer%n_workers)], &
-         mask = balancer%worker%resource == resource_id)
+         mask = balancer%worker%get_resource () == resource_id)
   end subroutine channel_balancer_get_resource_group
 
   pure integer function channel_balancer_get_resource_master (balancer, resource_id) &
@@ -182,11 +189,15 @@ contains
     class(channel_balancer_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
     integer :: i
+    if (.not. balancer%resource(resource_id)%is_active ()) then
+       worker_id = -1
+       return
+    end if
     !! Linear search.
     !! First element in worker group is defined as master.
     associate (worker => balancer%worker)
       do i = 1, balancer%n_workers
-         if (worker(i)%resource == resource_id) then
+         if (worker(i)%get_resource () == resource_id) then
             worker_id = i
             exit
          end if
@@ -199,12 +210,16 @@ contains
     integer, intent(in) :: worker_id
     integer, intent(out) :: resource_id
     integer :: i_state
-    if (balancer%worker(worker_id)%assigned) then
-       resource_id = balancer%worker(worker_id)%resource
+    if (.not. balancer%is_assignable (worker_id)) then
+       resource_id = -1
+       return
+    end if
+    if (balancer%worker(worker_id)%is_assigned ()) then
+       resource_id = balancer%worker(worker_id)%get_resource ()
        return
     end if
     associate (state => balancer%state)
-      i_state = balancer%worker(worker_id)%partition
+      i_state = balancer%worker(worker_id)%get_state ()
       if (.not. state(i_state)%has_resource ()) then
          resource_id = 0
          return
@@ -225,7 +240,7 @@ contains
       integer :: i, n_workers
       n_workers = 0
       do i = 1, balancer%n_workers
-         if (.not. balancer%worker(i)%partition == i_state) cycle
+         if (.not. balancer%worker(i)%get_state () == i_state) cycle
          if (balancer%is_worker_pending (i)) then
             write (msg_buffer, "(A,1X,I0,1X,A,1X,I0,1X,A)") "WORKER", i, "STATE", i_state, "ASSIGNED"
             call msg_bug ()
@@ -244,10 +259,10 @@ contains
     class(channel_balancer_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
     integer :: i, i_state, resource_id
-    if (.not. balancer%worker(worker_id)%assigned) return
+    if (.not. balancer%worker(worker_id)%is_assigned ()) return
     associate (state => balancer%state)
-      i_state = balancer%worker(worker_id)%partition
-      resource_id = balancer%worker(worker_id)%resource
+      i_state = balancer%worker(worker_id)%get_state ()
+      resource_id = balancer%worker(worker_id)%get_resource ()
       call balancer%resource(resource_id)%set_inactive ()
       call state(i_state)%free_resource (resource_id)
       select case (state(i_state)%mode)
@@ -255,7 +270,7 @@ contains
          call balancer%worker(worker_id)%free ()
       case (STATE_ALL)
          do i = 1, balancer%n_workers
-            if (.not. balancer%worker(i)%partition == i_state) cycle
+            if (.not. balancer%worker(i)%get_state () == i_state) cycle
             call balancer%worker(i)%free ()
          end do
       end select
