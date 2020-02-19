@@ -88,7 +88,9 @@ module balancer_base
        integer, intent(in), optional :: unit
      end subroutine balancer_base_deferred_write
 
-     !> Pure forbids any MPI intrusion!!
+     !> Has resource an associated resource group.
+     !!
+     !! \note .true. only on an active resource, else .false.
      pure logical function balancer_base_has_resource_group (balancer, resource_id) &
           result (flag)
        import :: balancer_base_t
@@ -96,6 +98,10 @@ module balancer_base
        integer, intent(in) :: resource_id
      end function balancer_base_has_resource_group
 
+     !> Get resource group.
+     !!
+     !! \note Implementation must check against group existence.
+     !! \return group (allocated|NOT allocated for (inactive|non-group) resource)
      pure subroutine balancer_base_get_resource_group (balancer, resource_id, group)
        import :: balancer_base_t
        class(balancer_base_t), intent(in) :: balancer
@@ -103,6 +109,9 @@ module balancer_base
        integer, dimension(:), allocatable, intent(out) :: group
      end subroutine balancer_base_get_resource_group
 
+     !> Get resource master (worker).
+     !!
+     !! \return worker Valid worker index (∈ {1, …, N}) only on active resource, else -1.
      pure integer function balancer_base_get_resource_master (balancer, resource_id) &
           result (worker)
        import :: balancer_base_t
@@ -113,7 +122,7 @@ module balancer_base
      !> Assign resource to a given worker or retrieve current assigned resource.
      !!
      !! If worker has already a resource assigned, return resource.
-     !! If worker has not assigned a resource, retrieve new resource from state.
+     !! If worker has not been assigned a resource, retrieve new resource from state.
      subroutine balancer_base_assign_worker (balancer, worker_id, resource_id)
        import :: balancer_base_t
        class(balancer_base_t), intent(inout) :: balancer
