@@ -179,7 +179,7 @@ contains
          "N_ASSIGNED_WORKERS", resource%n_assigned_workers
   end subroutine resource_write
 
-  elemental function resource_is_active (resource) result (flag)
+  elemental logical function resource_is_active (resource) result (flag)
     class(resource_t), intent(in) :: resource
     flag = resource%active
   end function resource_is_active
