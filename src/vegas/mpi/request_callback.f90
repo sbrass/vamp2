@@ -1,31 +1,3 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
-
 module request_callback
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use binary_tree
@@ -101,10 +73,10 @@ module request_callback
      !! \param[in] source Integer rank of the source in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_handle (handler, source, tag, comm)
+     subroutine request_handler_handle (handler, source_rank, tag, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
-       integer, intent(in) :: source
+       integer, intent(in) :: source_rank
        integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_handle
@@ -114,10 +86,10 @@ module request_callback
      !! \param[in] rank Integer of the receiver in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_client_handle (handler, rank, tag, comm)
+     subroutine request_handler_client_handle (handler, dest_rank, tag, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
-       integer, intent(in) :: rank
+       integer, intent(in) :: dest_rank
        integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_client_handle
@@ -198,6 +170,7 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
+    write (u, "(A)") "[REQUEST_CALLBACK_MANAGER]"
     call rhm%tree%write (u)
   end subroutine request_handler_manager_write
 
@@ -269,28 +242,28 @@ contains
   !!
   !! \param[in] handler_id
   !! \param[in] source
-  subroutine request_handler_manager_callback (rhm, handler_id, source)
+  subroutine request_handler_manager_callback (rhm, handler_id, source_rank)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
-    integer, intent(in) :: source
+    integer, intent(in) :: source_rank
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%handle (source = source, tag = handler_id, comm = rhm%comm)
+    call handler%handle (source_rank = source_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_callback
 
   !> Call client-sided procedure of callback with handler_id.
   !!
   !! \param[in] handler_id
   !! \param[in] source Destination rank.
-  subroutine request_handler_manager_client_callback (rhm, handler_id, source)
+  subroutine request_handler_manager_client_callback (rhm, handler_id, dest_rank)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
-    integer, intent(in) :: source
+    integer, intent(in) :: dest_rank
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%client_handle (rank = source, tag = handler_id, comm = rhm%comm)
+    call handler%client_handle (dest_rank = dest_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
 
