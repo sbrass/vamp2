@@ -36,15 +36,7 @@ module balancer_simple
   end type balancer_simple_t
 
   public :: balancer_simple_t
-  public :: shift_rank_to_worker
 contains
-  !> Shift rank index to worker index.
-  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
-  elemental integer function shift_rank_to_worker (rank) result (worker)
-    integer, intent(in) :: rank
-    worker = rank + 1
-  end function shift_rank_to_worker
-
   subroutine balancer_simple_init (balancer, n_workers, n_resources)
     class(balancer_simple_t), intent(out) :: balancer
     integer, intent(in) :: n_workers

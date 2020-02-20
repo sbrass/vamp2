@@ -151,7 +151,22 @@ module balancer_base
   end interface
 
   public :: balancer_base_t, resource_state_t
+  public :: shift_rank_to_worker, shift_worker_to_rank
 contains
+  !> Shift rank index to worker index.
+  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
+  elemental integer function shift_rank_to_worker (rank) result (worker)
+    integer, intent(in) :: rank
+    worker = rank + 1
+  end function shift_rank_to_worker
+
+  !> Shift worker index to rank index.
+  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
+  elemental integer function shift_worker_to_rank (worker) result (rank)
+    integer, intent(in) :: worker
+    rank = worker - 1
+  end function shift_worker_to_rank
+
   subroutine worker_write (worker, unit)
     class(worker_t), intent(in) :: worker
     integer, intent(in), optional :: unit
