@@ -681,34 +681,34 @@ contains
     call handler%allocate (n_requests, tag_offset)
   end subroutine vegas_handler_init
 
-  subroutine vegas_handler_handle (handler, source, tag, comm)
+  subroutine vegas_handler_handle (handler, source_rank, tag, comm)
     class(vegas_handler_t), intent(inout) :: handler
-    integer, intent(in) :: source
+    integer, intent(in) :: source_rank
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (source, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
+    call handler%result%receive (source_rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Irecv (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, source, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
+            & MPI_DOUBLE_PRECISION, source_rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_handle
 
-  subroutine vegas_handler_client_handle (handler, rank, tag, comm)
+  subroutine vegas_handler_client_handle (handler, dest_rank, tag, comm)
     class(vegas_handler_t), intent(inout) :: handler
-    integer, intent(in) :: rank
+    integer, intent(in) :: dest_rank
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
+    call handler%result%receive (dest_rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
+            & MPI_DOUBLE_PRECISION, dest_rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_client_handle

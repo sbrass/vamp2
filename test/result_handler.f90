@@ -39,21 +39,21 @@ contains
     call handler%allocate (n_requests, tag_offset = channel * n_requests)
   end subroutine result_handler_init
 
-  subroutine result_handler_handle (handler, source, tag, comm)
+  subroutine result_handler_handle (handler, source_rank, tag, comm)
     class(result_handler_t), intent(inout) :: handler
-    integer, intent(in) :: source
+    integer, intent(in) :: source_rank
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    call handler%obj%receive (source, handler%tag_offset, comm, handler%request)
+    call handler%obj%receive (source_rank, handler%tag_offset, comm, handler%request)
     handler%finished = .false.
   end subroutine result_handler_handle
 
-  subroutine result_handler_client_handle (handler, rank, tag, comm)
+  subroutine result_handler_client_handle (handler, dest_rank, tag, comm)
     class(result_handler_t), intent(inout) :: handler
-    integer, intent(in) :: rank
+    integer, intent(in) :: dest_rank
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    call handler%obj%send (rank, handler%tag_offset, comm, handler%request)
+    call handler%obj%send (dest_rank, handler%tag_offset, comm, handler%request)
     handler%finished = .false.
   end subroutine result_handler_client_handle
 
