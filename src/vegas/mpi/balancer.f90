@@ -115,7 +115,10 @@ module balancer_base
 
      !> Get resource master (worker).
      !!
-     !! \return worker Valid worker index (∈ {1, …, N}) only on active resource, else -1.
+     !! Return worker as given, however, if extended type is used in a non-local
+     !! or in combination with a commnuicative request type, then check on activation status of associated resource.
+     !!
+     !! \return worker Valid worker index (∈ {1, …, N}) only on active resource*, else -1.
      pure integer function balancer_base_get_resource_master (balancer, resource_id) &
           result (worker)
        import :: balancer_base_t

@@ -7,6 +7,8 @@ module balancer_simple
 
   implicit none
 
+  private
+
   integer, parameter :: N_BALANCER_SIMPLE_STATES = 1, &
        BALANCER_SIMPLE_CHANNEL = 1
 
@@ -32,7 +34,17 @@ module balancer_simple
      procedure :: assign_worker => balancer_simple_assign_worker
      procedure :: free_worker => balancer_simple_free_worker
   end type balancer_simple_t
+
+  public :: balancer_simple_t
+  public :: shift_rank_to_worker
 contains
+  !> Shift rank index to worker index.
+  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
+  elemental integer function shift_rank_to_worker (rank) result (worker)
+    integer, intent(in) :: rank
+    worker = rank + 1
+  end function shift_rank_to_worker
+
   subroutine balancer_simple_init (balancer, n_workers, n_resources)
     class(balancer_simple_t), intent(out) :: balancer
     integer, intent(in) :: n_workers
@@ -106,14 +118,15 @@ contains
          mask = balancer%worker%get_resource () == resource_id)
   end subroutine balancer_simple_get_resource_group
 
+  !> Retrieve resource master holding the results to be communicated.
+  !!
+  !! As the simple balancer operates locally on each worker, we do not need to check whether a resource is currently active.
+  !! All the resources (and their respective order) is fixed at each update of the balancer.
   pure integer function balancer_simple_get_resource_master (balancer, resource_id) &
        result (worker_id)
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
-    if (.not. balancer%resource(resource_id)%is_active ()) then
-       worker_id = -1
-       return
-    end if
+    !! \note Do NOT check on resource activation (see interface prescription).
     if (balancer%parallel_grid(resource_id)) then
        worker_id = 1
     else
