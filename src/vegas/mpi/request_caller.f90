@@ -1,5 +1,6 @@
 module request_caller
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
+  use kinds, only: default
   use diagnostics
 
   use request_base
@@ -22,7 +23,7 @@ module request_caller
    contains
      procedure :: init => request_caller_init
      procedure :: write => request_caller_write
-     procedure :: get_n_workers => request_caller_get_n_workers
+     procedure :: update_balancer => request_caller_update_balancer
      procedure, private :: provide_communicator_group => request_caller_provide_communicator_group
      procedure, private :: retrieve_communicator_group => request_caller_retrieve_communicator_group
      procedure :: handle_workload => request_caller_handle_workload
@@ -41,7 +42,11 @@ contains
     req%comm = comm
     req%n_channels = n_channels
     call MPI_COMM_SIZE (comm, req%n_workers)
+    !! Exclude master rank (0) from set of workers.
     req%n_workers = req%n_workers - 1
+    if (req%n_workers < 1) then
+       call msg_fatal ("Cannot handle less than 2 ranks in a master/slave global queue.")
+    end if
     call req%state%init (comm, req%n_workers)
     call req%cache%init (comm)
     call allocate_balancer ()
@@ -51,7 +56,7 @@ contains
       allocate (channel_balancer_t :: balancer)
       select type (balancer)
       type is (channel_balancer_t)
-         call balancer%init (req%n_channels, req%n_workers)
+         call balancer%init (n_workers = req%n_workers, n_resources = req%n_channels)
       end select
       call req%add_balancer (balancer)
     end subroutine allocate_balancer
@@ -68,10 +73,15 @@ contains
     !! Add State Write.
   end subroutine request_caller_write
 
-  integer function request_caller_get_n_workers (req) result (n_workers)
-    class(request_caller_t), intent(in) :: req
-    n_workers = req%n_workers
-  end function request_caller_get_n_workers
+  subroutine request_caller_update_balancer (req, weight, parallel_grid)
+    class(request_caller_t), intent(inout) :: req
+    real(default), dimension(:), intent(in) :: weight
+    logical, dimension(:), intent(in) :: parallel_grid
+    select type (balancer => req%balancer)
+    type is (channel_balancer_t)
+       call balancer%update_state(weight, parallel_grid)
+    end select
+  end subroutine request_caller_update_balancer
 
   subroutine request_caller_handle_workload (req)
     class(request_caller_t), intent(inout) :: req
