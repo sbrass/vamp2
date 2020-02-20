@@ -58,11 +58,12 @@ contains
   !! The information is stored in a dynamic-sized array list, which is filled, reversed and then used in a stack-like manner keeping track of the unassigned channels.
   !! Assigned and finished channels are then moved to the finished stack.
   subroutine request_simple_update (req, parallel_grid)
-    class(request_simple_t), intent(out) :: req
+    class(request_simple_t), intent(inout) :: req
     logical, dimension(:), intent(in) :: parallel_grid
-    integer :: me
+    integer :: me, worker
     call req%handler%clear ()
     call MPI_COMM_RANK (req%comm, me)
+    worker = SHIFT_RANK_TO_WORKER(me)
     select type (balancer => req%balancer)
     type is (balancer_simple_t)
        call balancer%update_state (me, parallel_grid)
