@@ -3,6 +3,7 @@ program main
   use iso_fortran_env, only: ERROR_UNIT, &
        r64 => REAL64
 
+  use diagnostics
   use signal, only: signal_print_pid_and_wait
   use test_utils, only: commandline_t
 

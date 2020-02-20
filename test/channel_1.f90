@@ -3,14 +3,14 @@ program main
   use iso_fortran_env, only: ERROR_UNIT, &
        r64 => REAL64
 
-  use request_balancer
+  use balancer_base
   use channel_balancer
 
   use test_utils
 
   implicit none
 
-  class(request_balancer_t), allocatable :: balancer
+  class(balancer_base_t), allocatable :: balancer
 
   integer, parameter :: N_WORKERS = 120, &
        N_CHANNELS = 100
@@ -28,11 +28,10 @@ program main
   channel_weight = channel_weight / sum (channel_weight)
 
   allocate (channel_balancer_t :: balancer)
-  call balancer%init (n_workers, n_channels)
   select type (balancer)
   type is (channel_balancer_t)
-     call balancer%add_parallel_grid (parallel_grid)
-     call balancer%add_channel_weight (channel_weight)
-     call balancer%write (ERROR_UNIT)
+     call balancer%init (n_workers, n_channels)
+     call balancer%update_state (channel_weight, parallel_grid)
   end select
+  call balancer%write (ERROR_UNIT)
 end program main

@@ -44,10 +44,10 @@ program main
 
 #ifdef MPI
   allocate (request_simple_t :: req)
-  call req%base_init (MPI_COMM_WORLD)
   select type (req)
   type is (request_simple_t)
-     call req%update (n_channels, parallel_grid)
+     call req%init (MPI_COMM_WORLD, n_channels)
+     call req%update (parallel_grid)
   end select
 #endif
 
@@ -105,7 +105,7 @@ contains
        select type (req)
        type is (request_simple_t)
           worker = req%get_request_master (ch)
-          call req%call_handler (ch, worker)
+          call req%call_handler (handler_id = ch, worker_id = worker)
        class default
           call msg_bug ("Unknown request_t extension.")
        end select
