@@ -251,11 +251,13 @@ contains
   !> Call handler for master communication for handler_id.
   !!
   !! \param[in] handler_id The associated key of the callback object.
-  subroutine request_base_call_handler (req, handler_id, source)
+  subroutine request_base_call_handler (req, handler_id, worker_id)
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
-    integer, intent(in) :: source
-    call req%handler%callback (handler_id, source)
+    integer, intent(in) :: worker_id
+    integer :: source_rank
+    source_rank = shift_worker_to_rank (worker_id)
+    call req%handler%callback (handler_id, source_rank)
   end subroutine request_base_call_handler
 
   !> Call handler for slave communication for handler_id.
