@@ -44,6 +44,10 @@ module request_state
      procedure :: get_request => request_state_get_request
      procedure :: update_request => request_state_update_request
      procedure :: free_request => request_state_free_request
+     procedure :: provide_request_group => request_state_provide_request_group
+     procedure :: retrieve_request_group => request_state_retrieve_request_group
+     procedure :: client_serve => request_state_client_serve
+     procedure :: client_free => request_state_client_free
   end type request_state_t
 
   public :: request_state_t
@@ -53,7 +57,7 @@ contains
     type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_workers
     integer :: rank
-    state%comm = comm
+    call MPI_COMM_DUP (comm, state%comm)
     state%n_workers = n_workers
     state%n_workers_done = n_workers
     call state%request_iterator%init (1, n_workers)
@@ -168,5 +172,44 @@ contains
        call MPI_REQUEST_FREE (state%request(rank))
     end do
   end subroutine request_state_free_request
+
+  subroutine request_state_provide_request_group (state, dest_rank, worker)
+    class(request_state_t), intent(in) :: state
+    integer, intent(in) :: dest_rank
+    integer, dimension(:), intent(in) :: worker
+    call MPI_SEND (worker, size (worker), MPI_INTEGER, &
+         dest_rank, MPI_TAG_COMMUNICATOR_GROUP, state%comm)
+  end subroutine request_state_provide_request_group
+
+  subroutine request_state_retrieve_request_group (state, worker)
+    class(request_state_t), intent(inout) :: state
+    integer, dimension(:), allocatable, intent(out) :: worker
+    type(MPI_STATUS) :: status
+    integer :: n_workers
+    call MPI_PROBE (0, MPI_TAG_COMMUNICATOR_GROUP, state%comm, status)
+    call MPI_GET_COUNT(status, MPI_INTEGER, n_workers)
+    allocate (worker (n_workers), source = 0)
+    call MPI_RECV (worker, n_workers, MPI_INTEGER, &
+         0, MPI_TAG_COMMUNICATOR_GROUP, state%comm, status)
+  end subroutine request_state_retrieve_request_group
+
+  !> Query for a request (send an request tag, then receive a handler).
+  subroutine request_state_client_serve (state, handler_id, status)
+    class(request_state_t), intent(in) :: state
+    integer, intent(out) :: handler_id
+    type(MPI_STATUS), intent(out) :: status
+    call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
+         0, MPI_TAG_REQUEST, state%comm)
+    call MPI_RECV (handler_id, 1, MPI_INTEGER, &
+         0, MPI_ANY_TAG, state%comm, status)
+  end subroutine request_state_client_serve
+
+  !> Free handler from worker.
+  subroutine request_state_client_free (state, handler_id)
+    class(request_state_t), intent(in) :: state
+    integer, intent(in) :: handler_id
+    call MPI_SEND (handler_id, 1, MPI_INTEGER, &
+         0, MPI_TAG_RELEASE, state%comm)
+  end subroutine request_state_client_free
 end module request_state
 

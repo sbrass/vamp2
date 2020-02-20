@@ -24,8 +24,6 @@ module request_caller
      procedure :: init => request_caller_init
      procedure :: write => request_caller_write
      procedure :: update_balancer => request_caller_update_balancer
-     procedure, private :: provide_communicator_group => request_caller_provide_communicator_group
-     procedure, private :: retrieve_communicator_group => request_caller_retrieve_communicator_group
      procedure :: handle_workload => request_caller_handle_workload
      procedure :: request_workload => request_caller_request_workload
      procedure :: release_workload => request_caller_release_workload
@@ -39,7 +37,7 @@ contains
     class(request_caller_t), intent(out) :: req
     type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_channels
-    req%comm = comm
+    call MPI_COMM_DUP (comm, req%comm)
     req%n_channels = n_channels
     call MPI_COMM_SIZE (comm, req%n_workers)
     !! Exclude master rank (0) from set of workers.
@@ -49,7 +47,9 @@ contains
     end if
     call req%state%init (comm, req%n_workers)
     call req%cache%init (comm)
-    call allocate_balancer ()
+    if (req%is_master ()) then
+       call allocate_balancer ()
+    end if
   contains
     subroutine allocate_balancer ()
       class(balancer_base_t), allocatable :: balancer
@@ -67,9 +67,8 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
-    if (allocated (req%balancer)) call req%balancer%write (u)
-    call req%handler%write ()
-    !! Add Cache Write.
+    write (u, "(A)") "[REQUEST_CALLER]"
+    call req%base_write (u)
     !! Add State Write.
   end subroutine request_caller_write
 
@@ -77,6 +76,8 @@ contains
     class(request_caller_t), intent(inout) :: req
     real(default), dimension(:), intent(in) :: weight
     logical, dimension(:), intent(in) :: parallel_grid
+    !! \note bug if not allocated?
+    if (.not. allocated (req%balancer)) return
     select type (balancer => req%balancer)
     type is (channel_balancer_t)
        call balancer%update_state(weight, parallel_grid)
@@ -109,14 +110,14 @@ contains
                    call req%state%update_request (source, MPI_TAG_ASSIGN_SINGLE, handler)
                 else
                    call req%state%update_request (source, MPI_TAG_ASSIGN_GROUP, handler)
-                   call req%provide_communicator_group (source, handler)
+                   call provide_request_group (handler, source)
                 end if
              else
                 print *, "---------> TERMINATE"
                 call req%state%terminate (source)
              end if
           case (MPI_TAG_HANDLER_AND_RELEASE)
-             !! call req%call_handler (handler, source)
+             call req%call_handler (handler, source)
              call req%balancer%free_worker (source)
           case (MPI_TAG_RELEASE)
              call req%balancer%free_worker (source)
@@ -124,47 +125,28 @@ contains
              !! Allow workers to request their own termination.
              call req%state%terminate (source)
           case default
-             write (msg_buffer, "(I6,1X,A,1X,I6)") source, "INVALID TAG -> ", tag
+             write (msg_buffer, "(I6,1X,A,1X,I6,1X,A,1X,I0)") source, "INVALID TAG -> ", tag, "MSG", handler
              call msg_warning ()
           end select
        end do
        call req%state%receive_request ()
     end do
     call req%state%free_request ()
+  contains
+    subroutine provide_request_group (handler_id, dest_rank)
+      integer, intent(in) :: handler_id
+      integer, intent(in) :: dest_rank
+      integer, dimension(:), allocatable :: worker
+      call req%balancer%get_resource_group (handler, worker)
+      call req%state%provide_request_group (dest_rank, worker)
+    end subroutine provide_request_group
   end subroutine request_caller_handle_workload
-
-  subroutine request_caller_provide_communicator_group (req, source, handler)
-    class(request_caller_t), intent(in) :: req
-    integer, intent(in) :: source
-    integer, intent(in) :: handler
-    integer, dimension(:), allocatable :: worker
-    call req%balancer%get_resource_group (handler, worker)
-    call MPI_SEND (worker, size (worker), MPI_INTEGER, &
-         source, MPI_TAG_COMMUNICATOR_GROUP, req%comm)
-  end subroutine request_caller_provide_communicator_group
-
-  subroutine request_caller_retrieve_communicator_group (req, handler)
-    class(request_caller_t), intent(inout) :: req
-    integer, intent(in) :: handler
-    type(MPI_STATUS) :: status
-    integer :: n_workers
-    integer, dimension(:), allocatable :: worker
-    call MPI_PROBE (0, MPI_TAG_COMMUNICATOR_GROUP, req%comm, status)
-    call MPI_GET_COUNT(status, MPI_INTEGER, n_workers)
-    allocate (worker (n_workers), source = 0)
-    call MPI_RECV (worker, n_workers, MPI_INTEGER, &
-         0, MPI_TAG_COMMUNICATOR_GROUP, req%comm, status)
-    call req%cache%update (handler, worker)
-  end subroutine request_caller_retrieve_communicator_group
 
   subroutine request_caller_request_workload (req, request)
     class(request_caller_t), intent(inout) :: req
     type(request_t), intent(out) :: request
     type(MPI_STATUS) :: status
-    call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
-         0, MPI_TAG_REQUEST, req%comm)
-    call MPI_RECV (request%handler_id, 1, MPI_INTEGER, &
-         0, MPI_ANY_TAG, req%comm, status)
+    call req%state%client_serve (request%handler_id, status)
     request%terminate = .false.
     request%group = .false.
     request%callback = .false.
@@ -176,21 +158,27 @@ contains
        request%group_master = .true.
        request%callback = .true.
     case (MPI_TAG_ASSIGN_GROUP)
-       call req%retrieve_communicator_group (request%handler_id)
        request%group = .true.
+       call retrieve_request_group (request%handler_id)
        call req%cache%get_comm (request%comm)
        request%group_master = req%cache%is_master ()
        request%callback = req%cache%is_master ()
     case (MPI_TAG_TERMINATE)
        request%terminate = status%MPI_TAG == MPI_TAG_TERMINATE
     end select
+  contains
+    subroutine retrieve_request_group (handler_id)
+      integer, intent(in) :: handler_id
+      integer, dimension(:), allocatable :: worker
+      call req%state%retrieve_request_group (worker)
+      call req%cache%update (handler_id, worker)
+    end subroutine retrieve_request_group
   end subroutine request_caller_request_workload
 
   subroutine request_caller_release_workload (req, request)
     class(request_caller_t), intent(inout) :: req
     type(request_t), intent(in) :: request
-    call MPI_SEND (request%handler_id, 1, MPI_INTEGER, &
-         0, MPI_TAG_RELEASE, req%comm)
+    call req%state%client_free (request%handler_id)
   end subroutine request_caller_release_workload
 
   subroutine request_caller_handle_and_release_workload (req, request)
