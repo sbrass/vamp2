@@ -65,6 +65,7 @@ module request_base
    contains
      procedure :: base_init => request_base_init
      procedure :: base_write => request_base_write
+     procedure(request_base_deferred_write), deferred :: write
      procedure :: is_master => request_base_is_master
      procedure :: add_balancer => request_base_add_balancer
      procedure :: add_handler => request_base_add_handler
@@ -82,6 +83,12 @@ module request_base
   !! We note that it is not necessary to differentiate between master and worker on this level of abstraction.
   !! Hence, the request interface ignores any notion regarding a possible parallelization concept.
   abstract interface
+     subroutine request_base_deferred_write (req, unit)
+       import :: request_base_t
+       class(request_base_t), intent(in) :: req
+       integer, intent(in), optional :: unit
+     end subroutine request_base_deferred_write
+
      !> Request workload and returns an request_t object.
      !!
      !! The request_t object has an associated handler_id and provide several ways

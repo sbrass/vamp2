@@ -1,6 +1,8 @@
 module request_simple
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
 
+  use diagnostics
+
   use array_list
 
   use balancer_base
@@ -35,16 +37,21 @@ contains
     type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_channels
     integer :: n_workers
-    class(balancer_base_t), allocatable :: balancer
     call req%base_init (comm)
     call MPI_COMM_SIZE (req%comm, req%n_workers)
     req%n_channels = n_channels
-    allocate (balancer_simple_t :: balancer)
-    select type (balancer)
-    type is (balancer_simple_t)
-       call balancer%init (req%n_channels, req%n_workers)
-    end select
-    call req%add_balancer (balancer)
+    allocate (req%parallel_grid (n_channels), source = .false.)
+    call allocate_balancer ()
+  contains
+    subroutine allocate_balancer ()
+      class(balancer_base_t), allocatable :: balancer
+      allocate (balancer_simple_t :: balancer)
+      select type (balancer)
+      type is (balancer_simple_t)
+         call balancer%init (n_workers = req%n_workers, n_resources = req%n_channels)
+      end select
+      call req%add_balancer (balancer)
+    end subroutine allocate_balancer
   end subroutine request_simple_init
 
   !> Update number of channels and parallel grids.
@@ -66,26 +73,35 @@ contains
     worker = SHIFT_RANK_TO_WORKER(me)
     select type (balancer => req%balancer)
     type is (balancer_simple_t)
-       call balancer%update_state (me, parallel_grid)
+       call balancer%update_state (worker, parallel_grid)
     end select
+    req%parallel_grid = parallel_grid
   end subroutine request_simple_update
 
   subroutine request_simple_write (req, unit)
     class(request_simple_t), intent(in) :: req
     integer, intent(in), optional :: unit
-    integer :: u
+    integer :: u, n_size
     u = ERROR_UNIT; if (present (unit)) u = unit
+    write (u, "(A)") "[REQUEST_SIMPLE]"
+    write (u, "(A,1X,I0)") "N_CHANNELS", req%n_channels
+    write (u, "(A,1X,I0)") "N_WORKERS", req%n_workers
+    n_size = min (25, req%n_channels)
+    write (u, "(A,25(1X,L1))") "PARALLEL_GRID", req%parallel_grid(:n_size)
     call req%base_write (u)
   end subroutine request_simple_write
 
-  pure integer function request_simple_get_request_master (req, channel) &
+  integer function request_simple_get_request_master (req, channel) &
        result (worker)
     class(request_simple_t), intent(in) :: req
     integer, intent(in) :: channel
-    select type (balancer => req%balancer)
-    type is (balancer_simple_t)
-       worker = balancer%get_resource_master (channel)
-    end select
+    if (.not. allocated (req%balancer)) then
+       call msg_bug ("Error: Balancer is not allocated.")
+    end if
+    worker = req%balancer%get_resource_master (channel)
+    !! "Caveat emptor" hits here:
+    !! The balancer returns either a valid worker id or (-1) depending on the associated resource (it must be active...)
+    !! We have to check whether returned worker index is plausible.
   end function request_simple_get_request_master
 
   !> Request workload.
@@ -99,12 +115,14 @@ contains
   subroutine request_simple_request_workload (req, request)
     class(request_simple_t), intent(inout) :: req
     type(request_t), intent(out) :: request
-    integer :: worker_id
-    if (.not. req%balancer%is_pending ()) then
+    integer :: rank, worker_id
+    call MPI_COMM_RANK (req%comm, rank)
+    worker_id = shift_rank_to_worker (rank)
+    if (.not. req%balancer%is_pending () &
+         .or. .not. req%balancer%is_assignable (worker_id)) then
        request%terminate = .true.
        return
     end if
-    call MPI_COMM_RANK (req%comm, worker_id)
     call req%balancer%assign_worker (worker_id, request%handler_id)
     associate (channel => request%handler_id)
       if (req%parallel_grid (channel)) then

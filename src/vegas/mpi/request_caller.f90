@@ -3,7 +3,8 @@ module request_caller
   use diagnostics
 
   use request_base
-  use request_balancer
+  use balancer_base
+  use channel_balancer
   use request_state
   use request_callback
 
@@ -15,6 +16,7 @@ module request_caller
 
   type, extends (request_base_t):: request_caller_t
      private
+     integer :: n_channels = 0
      integer :: n_workers = 0
      type(request_state_t) :: state
    contains
@@ -32,14 +34,27 @@ module request_caller
   public :: request_caller_t
 contains
 
-  subroutine request_caller_init (req, comm)
+  subroutine request_caller_init (req, comm, n_channels)
     class(request_caller_t), intent(out) :: req
     type(MPI_COMM), intent(in) :: comm
+    integer, intent(in) :: n_channels
     req%comm = comm
+    req%n_channels = n_channels
     call MPI_COMM_SIZE (comm, req%n_workers)
     req%n_workers = req%n_workers - 1
     call req%state%init (comm, req%n_workers)
     call req%cache%init (comm)
+    call allocate_balancer ()
+  contains
+    subroutine allocate_balancer ()
+      class(balancer_base_t), allocatable :: balancer
+      allocate (channel_balancer_t :: balancer)
+      select type (balancer)
+      type is (channel_balancer_t)
+         call balancer%init (req%n_channels, req%n_workers)
+      end select
+      call req%add_balancer (balancer)
+    end subroutine allocate_balancer
   end subroutine request_caller_init
 
   subroutine request_caller_write (req, unit)
@@ -80,13 +95,12 @@ contains
              print *, "--------->", req%balancer%is_assignable (source)
              if (req%balancer%is_assignable (source)) then
                 call req%balancer%assign_worker (source, handler)
-                select case (req%balancer%get_resource_mode (source))
-                case (REQUEST_BALANCER_SINGLE)
+                if (.not. req%balancer%has_resource_group (handler)) then
                    call req%state%update_request (source, MPI_TAG_ASSIGN_SINGLE, handler)
-                case (REQUEST_BALANCER_GROUP)
+                else
                    call req%state%update_request (source, MPI_TAG_ASSIGN_GROUP, handler)
                    call req%provide_communicator_group (source, handler)
-                end select
+                end if
              else
                 print *, "---------> TERMINATE"
                 call req%state%terminate (source)
@@ -114,7 +128,7 @@ contains
     integer, intent(in) :: source
     integer, intent(in) :: handler
     integer, dimension(:), allocatable :: worker
-    call req%balancer%get_resource_worker (handler, worker)
+    call req%balancer%get_resource_group (handler, worker)
     call MPI_SEND (worker, size (worker), MPI_INTEGER, &
          source, MPI_TAG_COMMUNICATOR_GROUP, req%comm)
   end subroutine request_caller_provide_communicator_group
