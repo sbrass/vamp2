@@ -49,6 +49,7 @@ program main
      call req%init (MPI_COMM_WORLD, n_channels)
      call req%update (parallel_grid)
   end select
+  call req%write (ERROR_UNIT)
 #endif
 
   allocate (rng_stream_t :: rng)

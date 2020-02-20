@@ -143,8 +143,9 @@ contains
   subroutine request_simple_release_workload (req, request)
     class(request_simple_t), intent(inout) :: req
     type(request_t), intent(in) :: request
-    integer :: worker_id
-    call MPI_COMM_RANK (req%comm, worker_id)
+    integer :: rank, worker_id
+    call MPI_COMM_RANK (req%comm, rank)
+    worker_id = shift_rank_to_worker (rank)
     call req%balancer%free_worker (worker_id)
   end subroutine request_simple_release_workload
 
