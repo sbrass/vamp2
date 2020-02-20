@@ -72,5 +72,11 @@ program main
         call req%release_workload (request)
      end do
   end if
+
+  write (ERROR_UNIT, "(A)") "* =================================================="
+  write (ERROR_UNIT, "(A)") "* Finalization"
+  write (ERROR_UNIT, "(A)") "* =================================================="
+
+  call req%write (ERROR_UNIT)
   call MPI_FINALIZE ()
 end program main

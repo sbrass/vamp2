@@ -208,8 +208,12 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = ERROR_UNIT; if (present (unit)) u = unit
-    write (ERROR_UNIT, "(A)") "request_base_write"
-    call req%balancer%write (u)
+    if (allocated (req%balancer)) then
+       call req%balancer%write (u)
+    else
+       write (u, "(A)") "[BALANCER]"
+       write (u, "(A)") "=> Not allocated"
+    end if
     call req%handler%write (u)
   end subroutine request_base_write
 
