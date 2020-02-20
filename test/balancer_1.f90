@@ -29,7 +29,7 @@ program main
 
   call cmd%parse ()
   if (cmd%gdb_attach) then
-     if (cmd%gdb_attach_rank > n_workers) &
+     if (cmd%gdb_attach_rank >= n_workers) &
           call msg_fatal ("Cannot attach to rank outside of communicator.")
      if (cmd%gdb_attach_rank == rank) then
         call signal_print_pid_and_wait ()
@@ -38,7 +38,7 @@ program main
   end if
 
   parallel_grid(3) = .true.
-  worker = rank + 1
+  worker = shift_rank_to_worker (rank)
 
   write (ERROR_UNIT, "(A)") "* =================================================="
   write (ERROR_UNIT, "(A)") "* Setup"
