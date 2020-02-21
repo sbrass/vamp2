@@ -30,7 +30,7 @@ module request_base
      type(MPI_GROUP) :: parent_group
      type(MPI_COMM) :: comm
      type(MPI_GROUP) :: group
-     integer, dimension(:), allocatable :: worker
+     integer, dimension(:), allocatable :: rank
    contains
      procedure :: init => request_group_cache_init
      procedure :: reset => request_group_cache_reset
@@ -146,14 +146,14 @@ contains
     cache%comm = MPI_COMM_NULL
   end subroutine request_group_cache_reset
 
-  subroutine request_group_cache_update (cache, tag, worker)
+  subroutine request_group_cache_update (cache, tag, rank)
     class(request_group_cache_t), intent(inout) :: cache
     integer, intent(in) :: tag
-    integer, dimension(:), allocatable, intent(inout) :: worker
+    integer, dimension(:), allocatable, intent(inout) :: rank
     type(MPI_GROUP) :: group
     integer :: result, error
-    call move_alloc (worker, cache%worker)
-    call MPI_GROUP_INCL (cache%parent_group, size (cache%worker), cache%worker, group)
+    call move_alloc (rank, cache%rank)
+    call MPI_GROUP_INCL (cache%parent_group, size (cache%rank), cache%rank, group)
     call MPI_GROUP_COMPARE (cache%group, group, result)
     if (result == MPI_UNEQUAL) then
        cache%group = group
@@ -262,12 +262,11 @@ contains
   !> Call handler for master communication for handler_id.
   !!
   !! \param[in] handler_id The associated key of the callback object.
-  subroutine request_base_call_handler (req, handler_id, worker_id)
+  !! \param[in] source_rank The rank of the result's source.
+  subroutine request_base_call_handler (req, handler_id, source_rank)
     class(request_base_t), intent(inout) :: req
     integer, intent(in) :: handler_id
-    integer, intent(in) :: worker_id
-    integer :: source_rank
-    source_rank = shift_worker_to_rank (worker_id)
+    integer, intent(in) :: source_rank
     call req%handler%callback (handler_id, source_rank)
   end subroutine request_base_call_handler
 
