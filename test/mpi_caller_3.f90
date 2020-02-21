@@ -94,14 +94,14 @@ program main
      end do
   end if
 
-  call req%write (ERROR_UNIT)
-  call req%await_handler ()
-
   write (ERROR_UNIT, "(A)") "* =================================================="
   write (ERROR_UNIT, "(A)") "* Finalization"
   write (ERROR_UNIT, "(A)") "* =================================================="
 
+  call req%await_handler ()
   call req%write (ERROR_UNIT)
+  call MPI_BARRIER (MPI_COMM_WORLD)
+
   call MPI_FINALIZE ()
 contains
   subroutine init_all_handler (req)

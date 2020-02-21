@@ -45,7 +45,7 @@ program main
   channel_weight = channel_weight / sum (channel_weight)
 
   write (ERROR_UNIT, "(A)") "* =================================================="
-  write (ERROR_UNIT, "(A)") "* Setup"
+  write (ERROR_UNIT, "(A)") "* Setup request_caller_t without callbacks"
   write (ERROR_UNIT, "(A)") "* =================================================="
 
   write (ERROR_UNIT, "(A)") "* Initialize request caller object."
