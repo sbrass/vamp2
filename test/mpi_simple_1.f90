@@ -3,6 +3,7 @@ program main
 #define MPI 1
 
 #ifdef MPI
+  use balancer_base, only: shift_worker_to_rank
   use request_base
   use request_simple
   use request_callback, only: request_handler_t
@@ -106,7 +107,7 @@ contains
        select type (req)
        type is (request_simple_t)
           worker = req%get_request_master (ch)
-          call req%call_handler (handler_id = ch, worker_id = worker)
+          call req%call_handler (handler_id = ch, source_rank = shift_worker_to_rank (worker))
        class default
           call msg_bug ("Unknown request_t extension.")
        end select

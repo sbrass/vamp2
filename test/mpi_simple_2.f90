@@ -66,7 +66,7 @@ program main
      !! Differentiate setup of request object.
      select type (req)
      type is (request_simple_t)
-        call req%update (n_channels, parallel_grid)
+        call req%update (parallel_grid)
         if (req%is_master ()) call setup_all_handler (req)
      type is (request_caller_t)
         !! Update/add load balancer.
@@ -112,7 +112,7 @@ contains
     do ch = 1, n_channels
        call allocate_handler (req, ch, result(ch))
        call req%call_handler (ch, &
-            source = req%get_request_master (ch))
+            source_rank = req%get_request_master (ch))
     end do
   end subroutine setup_all_handler
 
