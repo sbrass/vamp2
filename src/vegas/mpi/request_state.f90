@@ -31,11 +31,12 @@ module request_state
      type(MPI_Status), dimension(:), allocatable :: status
      integer, dimension(:), allocatable :: indices
      !! i ∈ {1, N_workers}
-     integer, dimension(:), allocatable, public :: handler
+     integer, dimension(:), allocatable :: handler
      logical, dimension(:), allocatable :: terminated
      type(iterator_t) :: request_iterator
    contains
      procedure :: init => request_state_init
+     procedure :: write => request_state_write
      procedure :: is_terminated => request_state_is_terminated
      procedure :: terminate => request_state_terminate
      procedure :: receive_request => request_state_receive_request
@@ -68,6 +69,26 @@ contains
     allocate (state%terminated(state%n_workers), source = .false.)
     state%indices = [(rank, rank = 1, n_workers)]
   end subroutine request_state_init
+
+  subroutine request_state_write (state, unit)
+    class(request_state_t), intent(in) :: state
+    integer, intent(in), optional :: unit
+    integer :: u, i
+    u = ERROR_UNIT; if (present (unit)) u = unit
+    write (u, "(A)") "[REQUEST_STATE]"
+    write (u, "(A,1X,I0)") "N_WORKERS", state%n_workers
+    write (u, "(A,1X,I0)") "N_WORKERS_DONE", state%n_workers_done
+    write (u, "(A)") "RANK | SOURCE | TAG | ERROR | REQUEST_NULL"
+    do i = 1, state%n_workers_done
+       write (u, "(A,4(1X,I0),1X,L1)") "REQUEST", state%indices(i), &
+            state%status(i)%MPI_SOURCE, &
+            state%status(i)%MPI_TAG, &
+            state%status(i)%MPI_ERROR, &
+            (state%request(i) == MPI_REQUEST_NULL)
+    end do
+    write (u, "(A,999(1X,I0))") "HANDLER", state%handler
+    write (u, "(A,999(1X,L1))") "TERMINATED", state%terminated
+  end subroutine request_state_write
 
   ! pure function request_state_is_terminated (state) result (flag)
   function request_state_is_terminated (state) result (flag)
