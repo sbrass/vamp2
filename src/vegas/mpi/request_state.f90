@@ -205,11 +205,14 @@ contains
   end subroutine request_state_client_serve
 
   !> Free handler from worker.
-  subroutine request_state_client_free (state, handler_id)
+  subroutine request_state_client_free (state, handler_id, has_callback)
     class(request_state_t), intent(in) :: state
     integer, intent(in) :: handler_id
+    logical, intent(in) :: has_callback
+    integer :: tag
+    tag = merge (MPI_TAG_HANDLER_AND_RELEASE, MPI_TAG_RELEASE, has_callback)
     call MPI_SEND (handler_id, 1, MPI_INTEGER, &
-         0, MPI_TAG_RELEASE, state%comm)
+         0, tag, state%comm)
   end subroutine request_state_client_free
 end module request_state
 
