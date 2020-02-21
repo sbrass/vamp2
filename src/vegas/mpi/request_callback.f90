@@ -233,6 +233,20 @@ contains
     call rhm%tree%clear ()
   end subroutine request_handler_manager_clear
 
+  !> Get status (in a non-destructive way) for all associated handler.
+  subroutine request_handler_manager_fill_status (rhm)
+    class(request_handler_manager_t), intent(inout) :: rhm
+    type(binary_tree_iterator_t) :: iterator
+    integer :: handler_id
+    class(request_handler_t), pointer :: handler
+    call iterator%init (rhm%tree)
+    do while (iterator%is_iterable ())
+       call iterator%next (handler_id)
+       call rhm%handler_at (handler_id, handler)
+       call handler%get_status ()
+    end do
+  end subroutine request_handler_manager_fill_status
+
   logical function request_handler_manager_test (rhm, handler_id) result (flag)
     class(request_handler_manager_t), intent(inout) :: rhm
     integer, intent(in) :: handler_id
@@ -294,7 +308,6 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    write (ERROR_UNIT, "(A,3(1X,I0))") "CALLBACK", handler_id, source_rank
     call handler%handle (source_rank = source_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_callback
 
@@ -309,7 +322,6 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    write (ERROR_UNIT, "(A,3(1X,I0))") "CLIENT_CALLBACK", handler_id, dest_rank
     call handler%client_handle (dest_rank = dest_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
