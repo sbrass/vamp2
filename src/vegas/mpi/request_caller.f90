@@ -38,13 +38,13 @@ contains
     type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_channels
     call MPI_COMM_DUP (comm, req%comm)
-    req%n_channels = n_channels
-    call MPI_COMM_SIZE (comm, req%n_workers)
+    call MPI_COMM_SIZE (req%comm, req%n_workers)
     !! Exclude master rank (0) from set of workers.
     req%n_workers = req%n_workers - 1
     if (req%n_workers < 1) then
        call msg_fatal ("Cannot handle less than 2 ranks in a master/slave global queue.")
     end if
+    req%n_channels = n_channels
     call req%state%init (comm, req%n_workers)
     call req%cache%init (comm)
     if (req%is_master ()) then
@@ -86,7 +86,7 @@ contains
 
   subroutine request_caller_handle_workload (req)
     class(request_caller_t), intent(inout) :: req
-    integer :: handler, tag, source
+    integer :: handler, tag, source, worker_id
     if (.not. allocated (req%balancer)) then
        call msg_warning ("Request: Error occured, load balancer not allocated.&
           & Terminate all workers.")
@@ -99,13 +99,16 @@ contains
        call req%state%await_request ()
        do while (req%state%has_request ())
           call req%state%get_request (source, tag, handler)
+          !! Formally differentiate between worker_id and source.
+          worker_id = source
           if (.not. allocated (req%balancer)) tag = MPI_TAG_TERMINATE
           select case (tag)
           case (MPI_TAG_REQUEST)
-             print *, "[REQUEST]", source, tag, handler
-             print *, "--------->", req%balancer%is_assignable (source)
-             if (req%balancer%is_assignable (source)) then
-                call req%balancer%assign_worker (source, handler)
+             write (ERROR_UNIT, "(A)") "MPI_TAG_REQUEST"
+             write (ERROR_UNIT, "(A,3(1X,I0))") "[REQUEST]", source, tag, handler
+             write (ERROR_UNIT, "(A,1X,L1)") "--------->", req%balancer%is_assignable (source)
+             if (req%balancer%is_assignable (worker_id)) then
+                call req%balancer%assign_worker (worker_id, handler)
                 if (.not. req%balancer%has_resource_group (handler)) then
                    call req%state%update_request (source, MPI_TAG_ASSIGN_SINGLE, handler)
                 else
@@ -113,16 +116,21 @@ contains
                    call provide_request_group (handler, source)
                 end if
              else
-                print *, "---------> TERMINATE"
+                write (ERROR_UNIT, "(A)") "---------> TERMINATE"
                 call req%state%terminate (source)
              end if
           case (MPI_TAG_HANDLER_AND_RELEASE)
-             call req%call_handler (handler, source)
-             call req%balancer%free_worker (source)
+             write (ERROR_UNIT, "(A,2(1X,I0))") "MPI_TAG_HANDLER_AND_RELEASE", handler, source
+             !! \note call_handler expects an worker_id ∈ {1, …, N} and shifts it to a rank index!
+             !! We have to revert the effect beforehand.
+             call req%call_handler (handler, source_rank = source)
+             call req%balancer%free_worker (worker_id)
           case (MPI_TAG_RELEASE)
-             call req%balancer%free_worker (source)
+             write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_RELEASE", source
+             call req%balancer%free_worker (worker_id)
           case (MPI_TAG_TERMINATE)
              !! Allow workers to request their own termination.
+             write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_TERMINATE", source
              call req%state%terminate (source)
           case default
              write (msg_buffer, "(I6,1X,A,1X,I6,1X,A,1X,I0)") source, "INVALID TAG -> ", tag, "MSG", handler
@@ -136,9 +144,11 @@ contains
     subroutine provide_request_group (handler_id, dest_rank)
       integer, intent(in) :: handler_id
       integer, intent(in) :: dest_rank
-      integer, dimension(:), allocatable :: worker
-      call req%balancer%get_resource_group (handler, worker)
-      call req%state%provide_request_group (dest_rank, worker)
+      integer, dimension(:), allocatable :: rank
+      !! Rank indices and worker indices are identical, as we skip the master worker deliberately,
+      !! we can reuse the worker indices as rank indices.
+      call req%balancer%get_resource_group (handler_id, rank)
+      call req%state%provide_request_group (dest_rank, rank)
     end subroutine provide_request_group
   end subroutine request_caller_handle_workload
 
@@ -169,16 +179,17 @@ contains
   contains
     subroutine retrieve_request_group (handler_id)
       integer, intent(in) :: handler_id
-      integer, dimension(:), allocatable :: worker
-      call req%state%retrieve_request_group (worker)
-      call req%cache%update (handler_id, worker)
+      integer, dimension(:), allocatable :: rank
+      !! Here, worker and rank indices are interchangeable.
+      call req%state%retrieve_request_group (rank)
+      call req%cache%update (handler_id, rank)
     end subroutine retrieve_request_group
   end subroutine request_caller_request_workload
 
   subroutine request_caller_release_workload (req, request)
     class(request_caller_t), intent(inout) :: req
     type(request_t), intent(in) :: request
-    call req%state%client_free (request%handler_id)
+    call req%state%client_free (request%handler_id, has_callback = request%group_master)
   end subroutine request_caller_release_workload
 
   subroutine request_caller_handle_and_release_workload (req, request)
