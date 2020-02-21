@@ -92,13 +92,13 @@ contains
   end subroutine request_simple_write
 
   integer function request_simple_get_request_master (req, channel) &
-       result (worker)
+       result (rank)
     class(request_simple_t), intent(in) :: req
     integer, intent(in) :: channel
     if (.not. allocated (req%balancer)) then
        call msg_bug ("Error: Balancer is not allocated.")
     end if
-    worker = req%balancer%get_resource_master (channel)
+    rank = shift_worker_to_rank (req%balancer%get_resource_master (channel))
     !! "Caveat emptor" hits here:
     !! The balancer returns either a valid worker id or (-1) depending on the associated resource (it must be active...)
     !! We have to check whether returned worker index is plausible.
