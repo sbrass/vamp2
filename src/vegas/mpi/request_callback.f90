@@ -38,6 +38,8 @@ module request_callback
      type(MPI_STATUS), dimension(:), allocatable :: status
      logical :: finished = .false.
    contains
+     procedure :: base_write => request_handler_base_write
+     procedure(request_handler_write), deferred :: write
      !! \todo{sbrass} implement initialization procedure.
      procedure(request_handler_handle), deferred :: handle
      procedure(request_handler_client_handle), deferred :: client_handle
@@ -65,6 +67,12 @@ module request_callback
   end type request_handler_manager_t
 
   abstract interface
+     subroutine request_handler_write (handler, unit)
+       import :: request_handler_t
+       class(request_handler_t), intent(in) :: handler
+       integer, intent(in), optional :: unit
+     end subroutine request_handler_write
+
      !> Handle a request from server side.
      !!
      !! The message tag can be used in order to uniquify the respective messages between master and slave.
@@ -100,6 +108,22 @@ contains
   !!
   !! Request handler.
   !!
+  subroutine request_handler_base_write (handler, unit)
+    class(request_handler_t), intent(in) :: handler
+    integer, intent(in), optional :: unit
+    integer :: u, i
+    u = ERROR_UNIT; if (present (unit)) u = unit
+    write (u, "(A,1X,I0)") "N_REQUESTS", handler%n_requests
+    write (u, "(A,1X,I0)") "TAG_OFFSET", handler%tag_offset
+    write (u, "(A,1X,L1)") "FINISHED", handler%finished
+    do i = 1, handler%n_requests
+       write (u, "(A,4(1X,I0)),1X,L1") "REQUEST", i, &
+            handler%status(i)%MPI_SOURCE, &
+            handler%status(i)%MPI_TAG, &
+            handler%status(i)%MPI_ERROR, &
+            (handler%request(i) /= MPI_REQUEST_NULL)
+    end do
+  end subroutine request_handler_base_write
 
   !> Allocate MPI request and status object.
   !!
