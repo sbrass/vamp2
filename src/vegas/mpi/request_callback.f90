@@ -47,6 +47,7 @@ module request_callback
      procedure :: get_status => request_handler_get_status
      procedure :: testall => request_handler_testall
      procedure :: waitall => request_handler_waitall
+     procedure :: free => request_handler_free
   end type request_handler_t
 
   type :: request_handler_manager_t
@@ -62,6 +63,7 @@ module request_callback
      procedure :: test => request_handler_manager_test
      procedure :: wait => request_handler_manager_wait
      procedure :: waitall => request_handler_manager_waitall
+     procedure, private :: fill_status => request_handler_manager_fill_status
      procedure, private :: handler_at => request_handler_manager_handler_at
      procedure :: callback => request_handler_manager_callback
      procedure :: client_callback => request_handler_manager_client_callback
@@ -164,9 +166,6 @@ contains
   subroutine request_handler_waitall (handler)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
-    call handler%get_status ()
-    write (ERROR_UNIT, "(A)") "[WAITALL]"
-    call handler%write (ERROR_UNIT)
     if (handler%finished) return
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
@@ -178,9 +177,6 @@ contains
   logical function request_handler_testall (handler) result (flag)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
-    call handler%get_status ()
-    write (ERROR_UNIT, "(A)") "[TESTALL]"
-    call handler%write (ERROR_UNIT)
     if (.not. handler%finished) then
        call MPI_TESTALL (handler%n_requests, handler%request, handler%finished, &
             handler%status, error)
@@ -200,6 +196,17 @@ contains
       end do
     end subroutine print_status
   end function request_handler_testall
+
+  subroutine request_handler_free (handler)
+    class(request_handler_t), intent(inout) :: handler
+    integer :: i, error
+    do i = 1, handler%n_requests
+       call MPI_REQUEST_FREE (handler%request(i), error)
+       if (error /= 0) then
+          call msg_bug ("Request: Error occured during free request on handler.")
+       end if
+    end do
+  end subroutine request_handler_free
 
   !!
   !! Request handler manager.
