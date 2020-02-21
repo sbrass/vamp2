@@ -22,6 +22,7 @@ module result_handler
      type(result_t), pointer :: obj => null ()
    contains
      procedure :: init => result_handler_init
+     procedure :: write => result_handler_write
      procedure :: handle => result_handler_handle
      procedure :: client_handle => result_handler_client_handle
      final :: result_handler_final
@@ -38,6 +39,14 @@ contains
     handler%finished = .false.
     call handler%allocate (n_requests, tag_offset = channel * n_requests)
   end subroutine result_handler_init
+
+  subroutine result_handler_write (handler, unit)
+    class(result_handler_t), intent(in) :: handler
+    integer, intent(in), optional :: unit
+    integer :: u
+    u = ERROR_UNIT; if (present (unit)) u = unit
+    call handler%base_write (u)
+  end subroutine result_handler_write
 
   subroutine result_handler_handle (handler, source_rank, tag, comm)
     class(result_handler_t), intent(inout) :: handler
