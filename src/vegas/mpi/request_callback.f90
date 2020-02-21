@@ -44,6 +44,7 @@ module request_callback
      procedure(request_handler_handle), deferred :: handle
      procedure(request_handler_client_handle), deferred :: client_handle
      procedure :: allocate => request_handler_allocate
+     procedure :: get_status => request_handler_get_status
      procedure :: testall => request_handler_testall
      procedure :: waitall => request_handler_waitall
   end type request_handler_t
@@ -116,12 +117,13 @@ contains
     write (u, "(A,1X,I0)") "N_REQUESTS", handler%n_requests
     write (u, "(A,1X,I0)") "TAG_OFFSET", handler%tag_offset
     write (u, "(A,1X,L1)") "FINISHED", handler%finished
+    write (u, "(A)") "I | SOURCE | TAG | ERROR | REQUEST_NULL"
     do i = 1, handler%n_requests
-       write (u, "(A,4(1X,I0)),1X,L1") "REQUEST", i, &
+       write (u, "(A,4(1X,I0),1X,L1)") "REQUEST", i, &
             handler%status(i)%MPI_SOURCE, &
             handler%status(i)%MPI_TAG, &
             handler%status(i)%MPI_ERROR, &
-            (handler%request(i) /= MPI_REQUEST_NULL)
+            (handler%request(i) == MPI_REQUEST_NULL)
     end do
   end subroutine request_handler_base_write
 
@@ -136,7 +138,7 @@ contains
     class(request_handler_t), intent(inout) :: handler
     integer, intent(in) :: n_requests
     integer, intent(in) :: tag_offset
-    allocate (handler%request(n_requests))
+    allocate (handler%request(n_requests), source = MPI_REQUEST_NULL)
     allocate (handler%status(n_requests))
     handler%n_requests = n_requests
     if (mod (tag_offset, n_requests) /= 0) &
@@ -145,10 +147,26 @@ contains
     handler%tag_offset = tag_offset
   end subroutine request_handler_allocate
 
+  !> Get status from request objects in a non-destructive way.
+  subroutine request_handler_get_status (handler)
+    class(request_handler_t), intent(inout) :: handler
+    integer :: i
+    logical :: flag
+    handler%finished = .true.
+    do i = 1, handler%n_requests
+       call MPI_REQUEST_GET_STATUS (handler%request(i), flag, &
+            handler%status(i))
+       handler%finished = handler%finished .and. flag
+    end do
+  end subroutine request_handler_get_status
+
   !> Call MPI_WATIALL and raise finished flag.
   subroutine request_handler_waitall (handler)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
+    call handler%get_status ()
+    write (ERROR_UNIT, "(A)") "[WAITALL]"
+    call handler%write (ERROR_UNIT)
     if (handler%finished) return
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
@@ -160,6 +178,9 @@ contains
   logical function request_handler_testall (handler) result (flag)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
+    call handler%get_status ()
+    write (ERROR_UNIT, "(A)") "[TESTALL]"
+    call handler%write (ERROR_UNIT)
     if (.not. handler%finished) then
        call MPI_TESTALL (handler%n_requests, handler%request, handler%finished, &
             handler%status, error)
@@ -273,6 +294,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
+    write (ERROR_UNIT, "(A,3(1X,I0))") "CALLBACK", handler_id, source_rank
     call handler%handle (source_rank = source_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_callback
 
@@ -287,6 +309,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
+    write (ERROR_UNIT, "(A,3(1X,I0))") "CLIENT_CALLBACK", handler_id, dest_rank
     call handler%client_handle (dest_rank = dest_rank, tag = handler_id, comm = rhm%comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
