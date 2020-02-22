@@ -39,6 +39,7 @@ module request_state
      procedure :: write => request_state_write
      procedure :: is_terminated => request_state_is_terminated
      procedure :: terminate => request_state_terminate
+     procedure :: client_terminate => request_state_client_terminate
      procedure :: receive_request => request_state_receive_request
      procedure :: await_request => request_state_await_request
      procedure :: has_request => request_state_has_request
@@ -105,11 +106,22 @@ contains
     call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
          rank, MPI_TAG_TERMINATE, state%comm, error)
     if (error /= 0) then
-       write (msg_buffer, "(A,1X,I3)") "Request: Error occured during terminte, RANK", rank
+       write (msg_buffer, "(A,1X,I3)") "Request: Error occured during terminate, RANK", rank
        call msg_bug ()
     end if
     state%terminated(rank) = .true.
   end subroutine request_state_terminate
+
+  subroutine request_state_client_terminate (state)
+    class(request_state_t), intent(in) :: state
+    integer :: error
+    call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
+         0, MPI_TAG_TERMINATE, state%comm, error)
+    if (error /= 0) then
+       write (msg_buffer, "(A,1X,I3)") "Request: Error occured during client-sided terminate"
+       call msg_bug ()
+    end if
+  end subroutine request_state_client_terminate
 
   subroutine request_state_receive_request (state)
     class(request_state_t), intent(inout) :: state
