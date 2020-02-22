@@ -73,6 +73,14 @@ mpi_simple_3 = executable('mpi_simple_3', 'mpi_simple_3.f90',
                                        test_utils,
                                        signal],
                           link_language : 'fortran')
+mpi_switch = executable('mpi_switch', 'mpi_switch.f90',
+                          link_with : [load_balancer,
+                                       utils,
+                                       rng,
+                                       result_handler,
+                                       test_utils,
+                                       signal],
+                          link_language : 'fortran')
 
 
 test('Request balancer initialization.', balancer_1)

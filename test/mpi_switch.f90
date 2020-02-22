@@ -1,18 +1,17 @@
+!> Mock setup for the implementation in VAMP2.
 program main
   use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
-#define MPI 1
+  use kinds, only: default
 
-#ifdef MPI
-  use balancer_base, only: shift_worker_to_rank
   use request_base
   use request_simple
+  use request_caller
   use request_callback, only: request_handler_t
   use result_handler
   use mpi_f08
 
   use signal, only: signal_print_pid_and_wait
-  use test_utils, only: commandline_is_gdb_attach
-#endif
+  use test_utils, only: commandline_t
 
   use rng_base
   use rng_stream
@@ -24,95 +23,154 @@ program main
   implicit none
 
   integer, parameter :: n_channels = 13
+  real(default), dimension(N_CHANNELS) :: channel_weight = 0
   logical, dimension(n_channels) :: parallel_grid = .false.
   type(result_t), dimension(n_channels), target :: result
-  !! VAMP2
+
+  class(rng_t), allocatable :: rng
   type(iterator_t) :: channel_iter
   integer :: current_channel
-  class(rng_t), allocatable :: rng
-#ifdef MPI
+
   type(request_t) :: request
   class(request_base_t), allocatable :: req
-#endif
 
-#ifdef MPI
+  type(commandline_t) :: cmd
+  integer :: n_workers, rank
+
   call MPI_INIT ()
-#endif
+  call MPI_COMM_SIZE (MPI_COMM_WORLD, n_workers)
+  call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
 
-  parallel_grid(4) = .true.
-  parallel_grid(7) = .true.
-  parallel_grid(8) = .true.
+  channel_weight(1:10) = 1
+  channel_weight(11:40) = 2
+  channel_weight(41:70) = 3
+  channel_weight(71:100) = 1
+  parallel_grid = channel_weight > 1
+  channel_weight = channel_weight / sum (channel_weight)
 
-#ifdef MPI
-  allocate (request_simple_t :: req)
+  call cmd%parse ()
+  if (cmd%gdb_attach) then
+     if (cmd%gdb_attach_rank >= n_workers) &
+          call msg_fatal ("Cannot attach to rank outside of communicator.")
+     if (cmd%gdb_attach_rank == rank) then
+        call signal_print_pid_and_wait ()
+     end if
+     call MPI_BARRIER (MPI_COMM_WORLD)
+  end if
+
+  write (ERROR_UNIT, "(A)") "* =================================================="
+  write (ERROR_UNIT, "(A)") "* Setup request_base_t with callback"
+  write (ERROR_UNIT, "(A)") "* =================================================="
+
+  select case (cmd%method)
+  case ("simple")
+     allocate (request_simple_t :: req)
+  case ("load")
+     allocate (request_caller_t :: req)
+  end select
   select type (req)
   type is (request_simple_t)
      call req%init (MPI_COMM_WORLD, n_channels)
      call req%update (parallel_grid)
+     call init_all_handler (req)
+     call call_all_handler (req)
+  type is (request_caller_t)
+     call req%init (MPI_COMM_WORLD, n_channels)
+     call req%update_balancer (channel_weight, parallel_grid)
+     call init_all_handler (req)
   end select
+
   call req%write (ERROR_UNIT)
-#endif
+
+  write (ERROR_UNIT, "(A)") "* =================================================="
+  write (ERROR_UNIT, "(A)") "* Allocate and initialize RNG"
+  write (ERROR_UNIT, "(A)") "* =================================================="
 
   allocate (rng_stream_t :: rng)
   call rng%init ()
 
-#ifdef MPI
-  if (commandline_is_gdb_attach ()) then
-     if (req%is_master ()) call signal_print_pid_and_wait ()
-     call MPI_BARRIER (MPI_COMM_WORLD)
-  end if
-
-  call init_all_handler (req)
-#endif
+  write (ERROR_UNIT, "(A)") "* =================================================="
+  write (ERROR_UNIT, "(A)") "* Integrate"
+  write (ERROR_UNIT, "(A)") "* =================================================="
 
   call channel_iter%init (1, n_channels, 1)
+  if (req%is_master ()) then
+     !! Handle request balancer differently.
+     select type (req)
+     type is (request_caller_t)
+        call req%handle_workload ()
+        do while (channel_iter%is_iterable ())
+           select type (rng)
+           type is (rng_stream_t)
+              write (ERROR_UNIT, "(A,1X,I0)") "ADVANCE", channel_iter%get_current ()
+              call rng%next_substream ()
+           end select
+           call channel_iter%next_step ()
+        end do
+     end select
+  end if
+
+  !! channel_iter is already drained for master.
   channel: do while (channel_iter%is_iterable ())
-     current_channel = channel_iter%get_current ()
-#ifdef MPI
      call req%request_workload (request)
-     !! Proof: current_channel ∈ {1, …, N_channels}.
+     current_channel = channel_iter%get_current ()
      call advance_rng (request, channel_iter, rng)
      if (request%terminate) exit channel
      if (request%group) call MPI_BARRIER (request%comm)
      current_channel = request%handler_id
-#endif
+     !! Original statements go here.
      write (ERROR_UNIT, "(A,1X,I0)") "INTEGRATE", current_channel
-#ifdef MPI
-     !! Callback handler on master already registered.
      if (request%group_master) then
-        !! Veto handler allocation on master (is already allocated).
         if (.not. req%is_master ()) &
              call allocate_handler (req, current_channel, result(current_channel))
         call req%handle_and_release_workload (request)
      else
         call req%release_workload (request)
      end if
-#endif
      call channel_iter%next_step ()
   end do channel
-#ifdef MPI
+
+  !! Sentinel against un-terminated worker.
+  if (.not. request%terminate) then
+     select type (req)
+     type is (request_caller_t)
+        call req%terminate ()
+     end select
+  end if
+
+  write (ERROR_UNIT, "(A)") "* =================================================="
+  write (ERROR_UNIT, "(A)") "* Finalization"
+  write (ERROR_UNIT, "(A)") "* =================================================="
+
   call req%await_handler ()
+  call req%write (ERROR_UNIT)
+  call MPI_BARRIER (MPI_COMM_WORLD)
 
   call MPI_FINALIZE ()
 contains
   subroutine init_all_handler (req)
     class(request_base_t), intent(inout) :: req
-    integer :: ch, worker
+    integer :: ch
     !! The master worker needs always all handler (callback objects)
     !! in order to perform the communication to the client handler (callbacks).
     if (.not. req%is_master ()) return
-    call msg_message ("INIT ALL HANDLER (MASTER)")
     do ch = 1, n_channels
        call allocate_handler (req, ch, result(ch))
-       select type (req)
-       type is (request_simple_t)
-          worker = req%get_request_master (ch)
-          call req%call_handler (handler_id = ch, source_rank = shift_worker_to_rank (worker))
-       class default
-          call msg_bug ("Unknown request_t extension.")
-       end select
     end do
   end subroutine init_all_handler
+
+  subroutine call_all_handler (req)
+    class(request_base_t), intent(inout) :: req
+    integer :: ch
+    if (.not. req%is_master ()) return
+    do ch = 1, n_channels
+       select type (req)
+       type is (request_simple_t)
+          call req%call_handler (handler_id = ch, &
+               source_rank = req%get_request_master (ch))
+       end select
+    end do
+  end subroutine call_all_handler
 
   subroutine allocate_handler (req, handler_id, result)
     class(request_base_t), intent(inout) :: req
@@ -153,5 +211,4 @@ contains
        call iter%next_step ()
     end do advance
   end subroutine advance_rng
-#endif
 end program main

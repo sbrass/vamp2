@@ -13,6 +13,7 @@ module test_utils
   type :: commandline_t
      logical :: gdb_attach = .false.
      integer :: gdb_attach_rank = 0
+     character(:), allocatable :: method
    contains
      procedure :: write => commandline_write
      procedure :: parse => commandline_parse
@@ -50,12 +51,28 @@ contains
              case ("-")
                 cycle SCAN_CMD
              end select
-             print *, "ARG", arg
              read (arg(:arg_len), *) cmd%gdb_attach_rank
+          end if
+       case ("--method", "-m")
+          call cmd_iter%next_step ()
+          if (cmd_iter%is_iterable ()) then
+             call get_command_argument (number = cmd_iter%get_current (), &
+                  value = arg, length = arg_len)
+             select case (arg(1:1))
+             case ("-")
+                cycle SCAN_CMD
+             end select
+             select case (arg(:arg_len))
+             case ("simple", "Simple", "SIMPLE")
+                cmd%method = "simple"
+             case ("load", "Load", "LOAD")
+                cmd%method = "load"
+             end select
           end if
        end select
        call cmd_iter%next_step ()
     end do SCAN_CMD
+    if (.not. allocated (cmd%method)) cmd%method = "simple"
   end subroutine commandline_parse
 
   logical function commandline_is_gdb_attach () result (flag)
