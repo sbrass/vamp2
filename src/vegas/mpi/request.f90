@@ -73,6 +73,7 @@ module request_base
      procedure :: call_handler => request_base_call_handler
      procedure :: call_client_handler => request_base_call_client_handler
      procedure :: await_handler => request_base_await_handler
+     procedure :: barrier => request_base_barrier
      procedure(request_base_request_workload), deferred :: request_workload
      procedure(request_base_release_workload), deferred :: release_workload
      procedure(request_base_handle_and_release_workload), deferred :: handle_and_release_workload
@@ -284,4 +285,13 @@ contains
     class(request_base_t), intent(inout) :: req
     call req%handler%waitall ()
   end subroutine request_base_await_handler
+
+  subroutine request_base_barrier (req)
+    class(request_base_t), intent(in) :: req
+    integer :: error
+    call MPI_BARRIER (req%comm, error)
+    if (error /= MPI_SUCCESS) then
+       call msg_fatal ("Request: Error occured during MPI_BARRIER synchronisation.")
+    end if
+  end subroutine request_base_barrier
 end module request_base
