@@ -98,27 +98,20 @@ program main
      !! Handle request balancer differently.
      select type (req)
      type is (request_caller_t)
+        request%terminate = .true.
+        call update_iter_and_rng (request, channel_iter, rng)
         call req%handle_workload ()
-        do while (channel_iter%is_iterable ())
-           select type (rng)
-           type is (rng_stream_t)
-              write (ERROR_UNIT, "(A,1X,I0)") "ADVANCE", channel_iter%get_current ()
-              call rng%next_substream ()
-           end select
-           call channel_iter%next_step ()
-        end do
      end select
   end if
 
   !! channel_iter is already drained for master.
   channel: do while (channel_iter%is_iterable ())
      call req%request_workload (request)
-     current_channel = channel_iter%get_current ()
-     call advance_rng (request, channel_iter, rng)
+     call update_iter_and_rng (request, channel_iter, rng)
      if (request%terminate) exit channel
      if (request%group) call MPI_BARRIER (request%comm)
-     current_channel = request%handler_id
-     !! Original statements go here.
+     current_channel = channel_iter%get_current () !! Serial
+     !! Assert (current_channel == request%handler_id)
      write (ERROR_UNIT, "(A,1X,I0)") "INTEGRATE", current_channel
      if (request%group_master) then
         if (.not. req%is_master ()) &
@@ -127,11 +120,12 @@ program main
      else
         call req%release_workload (request)
      end if
-     call channel_iter%next_step ()
+     call channel_iter%next_step () !! Serial
   end do channel
 
-  !! Sentinel against un-terminated worker.
-  if (.not. request%terminate) then
+  if (.not. req%is_master () .and. .not. request%terminate) then
+     !! Sentinel against un-terminated worker.
+     !! However, do not interfere with RNG (status of current channel is undefined)
      select type (req)
      type is (request_caller_t)
         call req%terminate ()
@@ -143,8 +137,8 @@ program main
   write (ERROR_UNIT, "(A)") "* =================================================="
 
   call req%await_handler ()
+  call req%barrier ()
   call req%write (ERROR_UNIT)
-  call MPI_BARRIER (MPI_COMM_WORLD)
 
   call MPI_FINALIZE ()
 contains
@@ -186,12 +180,12 @@ contains
     end select
     call req%add_handler (handler_id, handler)
   end subroutine allocate_handler
-
+ 
   !! Advance the random number generator for the skipped channels.
   !!
   !! We set current_channel = request%handler_id, hence, we need to advance
   !! the random number generator until th iterator returns the same channel.
-  subroutine advance_rng (request, iter, rng)
+  subroutine update_iter_and_rng (request, iter, rng)
     type(request_t), intent(in) :: request
     type(iterator_t), intent(inout) :: iter
     class(rng_t), intent(inout) :: rng
@@ -200,7 +194,7 @@ contains
        !! else advance until we hit the previous channel (of request%handler_id):
        !! Proof: current_channel <= request%handler_id - 1
        if (.not. request%terminate) then
-          if (.not. iter%get_current () < request%handler_id) &
+          if (iter%get_current () >= request%handler_id) &
                exit advance
        end if
        select type (rng)
@@ -210,5 +204,5 @@ contains
        end select
        call iter%next_step ()
     end do advance
-  end subroutine advance_rng
+  end subroutine update_iter_and_rng
 end program main
