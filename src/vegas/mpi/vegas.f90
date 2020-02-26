@@ -1135,12 +1135,12 @@ contains
        type is (rng_stream_t)
           call rng%next_substream ()
        end select
-       if (self%is_parallelizable ()) then
+       if (self%parallel_grid) then
           grid = self%get_grid ()
           call grid%broadcast (self%comm)
           call self%set_grid (grid)
        end if
-       if (self%is_parallelizable ()) then
+       if (self%parallel_grid) then
           do k = 1, rank
              call increment_box_coord (self%box(1:n_dim_par), box_success)
              if (.not. box_success) exit
@@ -1189,7 +1189,7 @@ contains
              call increment_box_coord (self%box(1:n_dim_par), box_success)
              if (.not. box_success) exit shift
           end do shift
-            if (self%is_parallelizable ()) then
+            if (self%parallel_grid) then
                select type (rng)
                type is (rng_stream_t)
                   call rng%advance_state (self%config%n_dim * self%config%calls_per_box&
@@ -1197,7 +1197,7 @@ contains
                end select
             end if
        end do loop_over_par_boxes
-       if (self%is_parallelizable ()) then
+       if (self%parallel_grid) then
           call vegas_integrate_collect ()
           if (rank /= 0) cycle iteration
        end if
