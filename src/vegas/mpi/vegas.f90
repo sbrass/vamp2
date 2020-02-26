@@ -147,13 +147,14 @@ module vegas
      integer, dimension(:), allocatable :: box
      type(vegas_result_t) :: result
      type(MPI_COMM) :: comm
+     logical :: parallel_grid
    contains
      procedure, public :: final => vegas_final
      procedure, public :: set_limits => vegas_set_limits
      procedure, public :: set_calls => vegas_set_n_calls
      procedure, public :: get_grid => vegas_get_grid
      procedure, public :: set_grid => vegas_set_grid
-     procedure, public :: set_comm => vegas_set_comm
+     procedure :: prepare_parellel_integrate => vegas_prepare_parallel_integrate
      procedure, public :: is_parallelizable => vegas_is_parallelizable
      procedure, public :: get_config => vegas_get_config
      procedure, public :: set_config => vegas_set_config
@@ -742,7 +743,8 @@ contains
     call self%reset_grid ()
     call self%reset_result ()
     !! BEGIN MPI
-    call self%set_comm (MPI_COMM_WORLD)
+    self%comm = MPI_COMM_NULL
+    self%parallel_grid = .false.
     !! END MPI
   end function vegas_init
 
@@ -831,11 +833,28 @@ contains
     end if
   end subroutine vegas_set_grid
 
-  subroutine vegas_set_comm (self, comm)
+  !> Prepare a parallel integration.
+  !!
+  !! A parallel integration requires a communicator, which may be duplicated in order to provide a safe communication context for the current VEGAS instance.
+  !! Furthermore, given an optional parameter, the behavior with regards to the parallel evaluation can be changed (e.g. in the embed integration).
+  subroutine vegas_prepare_parallel_integrate (self, comm, duplicate_comm, parallel_grid)
     class(vegas_t), intent(inout) :: self
     type(MPI_COMM), intent(in) :: comm
-    self%comm = comm
-  end subroutine vegas_set_comm
+    logical, intent(in), optional :: duplicate_comm
+    logical, intent(in), optional :: parallel_grid
+    logical :: flag
+    flag = .true.; if (present (duplicate_comm)) flag = duplicate_comm
+    if (duplicate_comm) then
+       call MPI_COMM_DUP (comm, self%comm)
+    else
+       self%comm = comm
+    end if
+    if (present (parallel_grid)) then
+       self%parallel_grid = parallel_grid
+    else
+       self%parallel_grid = self%is_parallelizable ()
+    end if
+  end subroutine vegas_prepare_parallel_integrate
 
   elemental logical function vegas_is_parallelizable (self, opt_n_size) result (flag)
     class(vegas_t), intent(in) :: self

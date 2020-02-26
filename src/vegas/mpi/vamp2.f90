@@ -144,6 +144,7 @@ module vamp2
      procedure, public :: set_limits => vamp2_set_limits
      procedure, public :: set_chain => vamp2_set_chain
      procedure, public :: set_equivalences => vamp2_set_equivalences
+     procedure :: prepare_parallel_integrate => vamp2_prepare_parallel_integrate
      procedure, public :: get_n_calls => vamp2_get_n_calls
      procedure, public :: get_integral => vamp2_get_integral
      procedure, public :: get_variance => vamp2_get_variance
@@ -624,6 +625,24 @@ contains
     self%equivalences = equivalences
   end subroutine vamp2_set_equivalences
 
+  !> Prepare parallel integrate.
+  !!
+  !! A parallel integration requires a communicator, which may be duplicated in order to provide a safe communication context for the current VAMP2 instance.
+  !! Furthermore, setup request and callback objects.
+  subroutine vamp2_prepare_parallel_integrate (self, comm, duplicate_comm)
+    class(vamp2_t), intent(inout) :: self
+    type(MPI_COMM), intent(in) :: comm
+    logical, intent(in), optional :: duplicate_comm
+    logical :: flag
+    flag = .true.; if (present (duplicate_comm)) flag = duplicate_comm
+    if (duplicate_comm) then
+       call MPI_COMM_DUP (comm, self%comm)
+    else
+       self%comm = comm
+    end if
+    !! Allocate request_base_t object and fill callback on master...
+  end subroutine vamp2_prepare_parallel_integrate
+
   elemental real(default) function vamp2_get_n_calls (self) result (n_calls)
     class(vamp2_t), intent(in) :: self
     n_calls = sum (self%integrator%get_calls ())
@@ -785,6 +804,7 @@ contains
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
        !! BEGIN MPI
+       !! Update request base depending on the actual allocated type.
        call broadcast_weights_and_grids ()
        call prepare_handler () !! MASTER
        !! END MPI
