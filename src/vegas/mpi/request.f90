@@ -69,7 +69,7 @@ module request_base
      procedure :: is_master => request_base_is_master
      procedure :: add_balancer => request_base_add_balancer
      procedure :: add_handler => request_base_add_handler
-     procedure :: clear_handler => request_base_clear_handler
+     procedure :: reset => request_base_reset
      procedure :: call_handler => request_base_call_handler
      procedure :: call_client_handler => request_base_call_client_handler
      procedure :: await_handler => request_base_await_handler
@@ -254,11 +254,21 @@ contains
     call req%handler%add (handler_id, handler)
   end subroutine request_base_add_handler
 
-  !> Clear request handler manager from handler.
-  subroutine request_base_clear_handler (req)
+  !> Reset request.
+  !! Clear handler manager from associated callbacks,
+  !! deallocate balancer, iff allocated, and reset communicator cache.
+  subroutine request_base_reset (req, deallocate_balancer)
     class(request_base_t), intent(inout) :: req
+    logical, intent(in), optional :: deallocate_balancer
+    logical :: flag
+    flag = .false.; if (present (deallocate_balancer)) &
+         flag = deallocate_balancer
+    if (flag .and. allocated (req%balancer)) then
+       deallocate (req%balancer)
+    end if
     call req%handler%clear ()
-  end subroutine request_base_clear_handler
+    call req%cache%reset ()
+  end subroutine request_base_reset
 
   !> Call handler for master communication for handler_id.
   !!

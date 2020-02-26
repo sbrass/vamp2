@@ -79,7 +79,7 @@ contains
     logical, dimension(:), intent(in) :: parallel_grid
     !! \note bug if not allocated?
     if (.not. allocated (req%balancer)) return
-    call req%handler%clear ()
+    call req%reset ()
     select type (balancer => req%balancer)
     type is (channel_balancer_t)
        call balancer%update_state(weight, parallel_grid)

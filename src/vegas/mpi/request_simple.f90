@@ -68,7 +68,7 @@ contains
     class(request_simple_t), intent(inout) :: req
     logical, dimension(:), intent(in) :: parallel_grid
     integer :: me, worker
-    call req%handler%clear ()
+    call req%reset ()
     call MPI_COMM_RANK (req%comm, me)
     worker = SHIFT_RANK_TO_WORKER(me)
     select type (balancer => req%balancer)
