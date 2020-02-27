@@ -59,6 +59,7 @@ module request_base
   !! Second, we require that the implementation of the polling honors this order.
   type, abstract :: request_base_t
      type(MPI_COMM) :: comm
+     type(MPI_COMM) :: external_comm !! communicator for use outside of request, however, just a duplicate of comm.
      class(balancer_base_t), allocatable :: balancer
      type(request_group_cache_t) :: cache
      type(request_handler_manager_t) :: handler
@@ -67,6 +68,7 @@ module request_base
      procedure :: base_write => request_base_write
      procedure(request_base_deferred_write), deferred :: write
      procedure :: is_master => request_base_is_master
+     procedure :: get_external_comm => request_base_get_external_comm
      procedure :: add_balancer => request_base_add_balancer
      procedure :: add_handler => request_base_add_handler
      procedure :: reset => request_base_reset
@@ -200,6 +202,7 @@ contains
     class(request_base_t), intent(out) :: req
     type(MPI_COMM), intent(in) :: comm
     call MPI_COMM_DUP (comm, req%comm)
+    call MPI_COMM_DUP (comm, req%external_comm)
     call req%cache%init (comm)
     call req%handler%init (comm)
   end subroutine request_base_init
@@ -232,6 +235,17 @@ contains
     end if
     flag = (rank == 0)
   end function request_base_is_master
+
+  !> Provide external communicator.
+  !!
+  !! The external communicator is just a duplicate of request%comm,
+  !! in order to provide the same group of workers to external communication,
+  !! however, in a different context, such that communication from outside does not interfere with request.
+  subroutine request_base_get_external_comm (req, comm)
+    class(request_base_t), intent(in) :: req
+    type(MPI_COMM), intent(out) :: comm
+    comm = req%external_comm
+  end subroutine request_base_get_external_comm
 
   !> Add balancer to request.
   !!
