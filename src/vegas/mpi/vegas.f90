@@ -131,6 +131,7 @@ module vegas
      real(default), dimension(:, :), pointer :: d => null ()
    contains
      procedure :: init => vegas_handler_init
+     procedure :: write => vegas_handler_write
      procedure :: handle => vegas_handler_handle
      procedure :: client_handle => vegas_handler_client_handle
      final :: vegas_handler_final
@@ -681,6 +682,21 @@ contains
     tag_offset = handler_id * n_requests
     call handler%allocate (n_requests, tag_offset)
   end subroutine vegas_handler_init
+
+  subroutine vegas_handler_write (handler, unit)
+    class(vegas_handler_t), intent(in) :: handler
+    integer, intent(in), optional :: unit
+    integer :: u, j
+    u = given_output_unit (unit)
+    write (u, "(A)") "[VEGAS_HANDLER]"
+    call handler%base_write (unit)
+    call handler%result%write (u)
+    write (u, "(A)") "BEGIN D"
+    do j = 1, size (handler%d, dim=2)
+       write (u, "(1X,I3,999(1X," // FMT_17 // "))") handler%d(:, j)
+    end do
+    write (u, "(A)") "END D"
+  end subroutine vegas_handler_write
 
   subroutine vegas_handler_handle (handler, source_rank, tag, comm)
     class(vegas_handler_t), intent(inout) :: handler
