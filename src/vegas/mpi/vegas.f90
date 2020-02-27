@@ -149,7 +149,7 @@ module vegas
      type(vegas_result_t) :: result
      !! BEGIN MPI
      type(MPI_COMM) :: comm
-     logical :: parallel_grid
+     logical :: parallel_mode = .false.
      !! END MPI
    contains
      procedure, public :: final => vegas_final
@@ -157,7 +157,7 @@ module vegas
      procedure, public :: set_calls => vegas_set_n_calls
      procedure, public :: get_grid => vegas_get_grid
      procedure, public :: set_grid => vegas_set_grid
-     procedure :: prepare_parellel_integrate => vegas_prepare_parallel_integrate
+     procedure :: prepare_parallel_integrate => vegas_prepare_parallel_integrate
      procedure, public :: is_parallelizable => vegas_is_parallelizable
      procedure, public :: get_config => vegas_get_config
      procedure, public :: set_config => vegas_set_config
@@ -695,7 +695,7 @@ contains
     call handler%result%write (u)
     write (u, "(A)") "BEGIN D"
     do j = 1, size (handler%d, dim=2)
-       write (u, "(1X,I3,999(1X," // FMT_17 // "))") handler%d(:, j)
+       write (u, "(1X,I3,999(1X," // FMT_17 // "))") j, handler%d(:, j)
     end do
     write (u, "(A)") "END D"
   end subroutine vegas_handler_write
@@ -707,11 +707,11 @@ contains
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (source_rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
+    call handler%result%receive (source_rank, tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Irecv (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, source_rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
+            & MPI_DOUBLE_PRECISION, source_rank, tag * n_result_requests + 1, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_handle
@@ -723,11 +723,11 @@ contains
     type(MPI_COMM), intent(in) :: comm
     integer :: n_result_requests
     n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (dest_rank, MPI_TAG_OFFSET + tag * n_result_requests, comm, &
+    call handler%result%send (dest_rank, tag * n_result_requests, comm, &
        handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, dest_rank, MPI_TAG_OFFSET + (tag + 1) * n_result_requests, comm,&
+            & MPI_DOUBLE_PRECISION, dest_rank, tag * n_result_requests + 1, comm,&
             & handler%request(n_result_requests + 1))
     handler%finished = .false.
   end subroutine vegas_handler_client_handle
@@ -762,7 +762,7 @@ contains
     call self%reset_result ()
     !! BEGIN MPI
     self%comm = MPI_COMM_NULL
-    self%parallel_grid = .false.
+    self%parallel_mode = .true.
     !! END MPI
   end function vegas_init
 
@@ -831,9 +831,8 @@ contains
   subroutine vegas_set_grid (self, grid)
     class(vegas_t), intent(inout) :: self
     type(vegas_grid_t), intent(in) :: grid
-    integer :: j, rank
+    integer :: j
     logical :: success
-    call MPI_Comm_rank (self%comm, rank)
     success = .true.
     success = (success .and. (grid%n_dim .eq. self%config%n_dim))
     success = (success .and. all (grid%x_lower .eq. self%grid%x_lower))
@@ -855,11 +854,11 @@ contains
   !!
   !! A parallel integration requires a communicator, which may be duplicated in order to provide a safe communication context for the current VEGAS instance.
   !! Furthermore, given an optional parameter, the behavior with regards to the parallel evaluation can be changed (e.g. in the embed integration).
-  subroutine vegas_prepare_parallel_integrate (self, comm, duplicate_comm, parallel_grid)
+  subroutine vegas_prepare_parallel_integrate (self, comm, duplicate_comm, parallel_mode)
     class(vegas_t), intent(inout) :: self
     type(MPI_COMM), intent(in) :: comm
     logical, intent(in), optional :: duplicate_comm
-    logical, intent(in), optional :: parallel_grid
+    logical, intent(in), optional :: parallel_mode
     logical :: flag
     flag = .true.; if (present (duplicate_comm)) flag = duplicate_comm
     if (duplicate_comm) then
@@ -867,19 +866,15 @@ contains
     else
        self%comm = comm
     end if
-    if (present (parallel_grid)) then
-       self%parallel_grid = parallel_grid
-    else
-       self%parallel_grid = self%is_parallelizable ()
-    end if
+    self%parallel_mode = .true.; if (present (parallel_mode)) &
+         self%parallel_mode = parallel_mode
   end subroutine vegas_prepare_parallel_integrate
 
   elemental logical function vegas_is_parallelizable (self, opt_n_size) result (flag)
     class(vegas_t), intent(in) :: self
     integer, intent(in), optional :: opt_n_size
     integer :: n_size
-    n_size = 2
-    if (present (opt_n_size)) n_size = opt_n_size
+    n_size = 2; if (present (opt_n_size)) n_size = opt_n_size
     flag = (self%config%n_boxes**floor (self%config%n_dim / 2.) >= n_size)
   end function vegas_is_parallelizable
 
@@ -1120,9 +1115,11 @@ contains
     integer :: n_size
     integer :: n_dim_par
     logical :: box_success
-    ! MPI-specific variables below
+    !! BEGIN MPI
     integer :: rank
+    logical :: parallel_mode
     type(vegas_grid_t) :: grid
+    !! END MPI
     call set_options ()
     call self%init_grid ()
     if (opt_reset_result) call self%result%reset ()
@@ -1131,9 +1128,11 @@ contains
     cumulative_std = 0.
     n_size = 1
     n_dim_par = floor (self%config%n_dim / 2.)
+    !! BEGIN MPI
     call MPI_Comm_size (self%comm, n_size)
     call MPI_Comm_rank (self%comm, rank)
-    print *, "=========> VEGAS", n_size, rank
+    parallel_mode = self%parallel_mode .and. self%is_parallelizable ()
+    !! END MPI
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
@@ -1153,12 +1152,10 @@ contains
        type is (rng_stream_t)
           call rng%next_substream ()
        end select
-       if (self%parallel_grid) then
+       if (parallel_mode) then
           grid = self%get_grid ()
           call grid%broadcast (self%comm)
           call self%set_grid (grid)
-       end if
-       if (self%parallel_grid) then
           do k = 1, rank
              call increment_box_coord (self%box(1:n_dim_par), box_success)
              if (.not. box_success) exit
@@ -1207,7 +1204,7 @@ contains
              call increment_box_coord (self%box(1:n_dim_par), box_success)
              if (.not. box_success) exit shift
           end do shift
-            if (self%parallel_grid) then
+            if (parallel_mode) then
                select type (rng)
                type is (rng_stream_t)
                   call rng%advance_state (self%config%n_dim * self%config%calls_per_box&
@@ -1215,7 +1212,7 @@ contains
                end select
             end if
        end do loop_over_par_boxes
-       if (self%parallel_grid) then
+       if (parallel_mode) then
           call vegas_integrate_collect ()
           if (rank /= 0) cycle iteration
        end if

@@ -788,7 +788,9 @@ contains
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
        call channel_iterator%init (1, self%config%n_channel)
+       PRINT *, "SENTINEL PREPARE"
        call self%prepare_integrate_iteration (func)
+       PRINT *, "SENTINEL INTEGRATE"
        !! BEGIN MPI
        if (self%request%is_master ()) then
           select type (req => self%request)
@@ -809,6 +811,9 @@ contains
           if (request%terminate) exit channel
           if (request%group) call MPI_BARRIER (request%comm)
           ch = request%handler_id
+          call self%integrator(ch)%prepare_parallel_integrate(request%comm, &
+               duplicate_comm = .false., &
+               parallel_mode = request%group)
           !! END MPI
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
@@ -834,9 +839,10 @@ contains
              call req%terminate ()
           end select
        end if
-       call self%request%barrier ()
        call reduce_func_calls (func)
+       call self%request%write ()
        call self%request%await_handler ()
+       call self%request%barrier ()
        if (.not. self%request%is_master ()) cycle
        !! END MPI
        call self%compute_result_and_efficiency ()
@@ -932,12 +938,12 @@ contains
   subroutine vamp2_prepare_integrate_iteration (self, func)
     class(vamp2_t), intent(inout) :: self
     class(vamp2_func_t), intent(inout) :: func
-    call fill_func_with_weights_and_grids (func)
     !! BEGIN MPI
     if (.not. allocated (self%request)) then
        call msg_bug ("VAMP2: prepare integration iteration failed: unallocated request.")
     end if
     call broadcast_weights_and_grids ()
+    PRINT *, "SENTINEL UPDATE"
     select type (req => self%request)
     type is (request_simple_t)
        call req%update (self%integrator%is_parallelizable ())
@@ -950,6 +956,8 @@ contains
     class default
        call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
     end select
+    !! END MPI
+    call fill_func_with_weights_and_grids (func)
   contains
     subroutine fill_func_with_weights_and_grids (func)
       class(vamp2_func_t), intent(inout) :: func
@@ -961,6 +969,7 @@ contains
       end do
     end subroutine fill_func_with_weights_and_grids
 
+    !! BEGIN MPI
     subroutine broadcast_weights_and_grids ()
       type(vegas_grid_t) :: grid
       type(MPI_COMM) :: comm
@@ -998,6 +1007,7 @@ contains
       do ch = 1, self%config%n_channel
          select type (req)
          type is (request_simple_t)
+            print *, "REQUEST MASTER", ch, req%get_request_master (ch)
             call req%call_handler (handler_id = ch, &
                  source_rank = req%get_request_master (ch))
          end select

@@ -126,13 +126,13 @@ contains
     call req%balancer%assign_worker (worker_id, request%handler_id)
     associate (channel => request%handler_id)
       if (req%parallel_grid (channel)) then
-         request%comm = req%comm
+         request%comm = req%external_comm
          request%group = .true.
          !! The object communicator is master.
-         request%group_master = req%is_master ()
+         request%group_master = req%get_request_master (channel)
          request%callback = req%is_master ()
       else
-         request%comm = MPI_COMM_NULL
+         request%comm = req%external_comm
          request%group = .false.
          request%group_master = .true.
          request%callback = .true.

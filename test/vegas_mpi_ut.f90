@@ -61,7 +61,9 @@ program main
 
   call mc%set_limits (x_lower, x_upper)
 
-  call mc%set_comm (MPI_COMM_WORLD)
+  call mc%prepare_parallel_integrate (MPI_COMM_WORLD, &
+       duplicate_comm = .true., &
+       parallel_mode = .true.)
 
   call mc%set_calls (10000)
   call mc%integrate (func, rng, 3, result=result, abserr=abserr)

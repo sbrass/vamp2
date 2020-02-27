@@ -49,7 +49,14 @@ program main
   use rng_base
   use rng_stream
 
+  use request_base
+  use request_simple
+
+  use test_utils
+
+  use signal
   use test_func
+  use diagnostics
 
   use vamp2
 
@@ -60,11 +67,28 @@ program main
   type(vamp2_t) :: mc
   class(rng_t), allocatable :: rng
   class(vamp2_func_t), allocatable :: func
+  class(request_base_t), allocatable :: req
   real(default), dimension(2), parameter :: x_lower = 0., &
        x_upper = 1.
   real(default) :: result, abserr
 
+  type(commandline_t) :: cmd
+  integer :: n_workers, rank
+
   call MPI_INIT ()
+  call MPI_COMM_SIZE (MPI_COMM_WORLD, n_workers)
+  call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
+
+  call cmd%parse ()
+  if (cmd%gdb_attach) then
+     if (cmd%gdb_attach_rank >= n_workers) &
+          call msg_fatal ("Cannot attach to rank outside of communicator.")
+     if (cmd%gdb_attach_rank == rank) then
+        call signal_print_pid_and_wait ()
+     end if
+     call MPI_BARRIER (MPI_COMM_WORLD)
+  end if
+
 
   allocate (rng_stream_t :: rng)
   call rng%init ()
@@ -72,11 +96,18 @@ program main
   allocate (test_func_t :: func)
   call func%init (n_dim = 2, n_channel = 2)
 
+  allocate (request_simple_t :: req)
+  select type (req)
+  type is (request_simple_t)
+     call req%init (MPI_COMM_WORLD, n_channels = 2)
+  end select
+
   mc = vamp2_t (2, 2)
+
+  call mc%allocate_request (req)
 
   call mc%set_limits (x_lower, x_upper)
   call mc%set_calls (1000)
-
 
   call mc%integrate (func, rng, 3, verbose = .true., result=result, abserr=abserr)
   write (ERROR_UNIT, "(A," // FMT_12 // ",A," // FMT_12 // ")") "Result:", result, "±", abserr

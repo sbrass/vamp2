@@ -9,8 +9,6 @@ module request_callback
 
   private
 
-  integer, parameter, public :: MPI_TAG_OFFSET = 128
-
   !> Request handler.
   !!
   !! A request handler allows to dispatch an object for communication a priori
@@ -167,6 +165,7 @@ contains
     class(request_handler_t), intent(inout) :: handler
     integer :: error
     if (handler%finished) return
+    call handler%write ()
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
        call msg_bug ("Request: Error occured during waitall on handler.")
