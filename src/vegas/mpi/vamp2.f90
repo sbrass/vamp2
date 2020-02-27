@@ -19,10 +19,10 @@ module vamp2
 
   use request_base
   use request_simple
-  use request_callback
+  use request_caller
   use request_balancer
   use channel_balancer
-  use request_caller
+  use request_callback
   use mpi_f08 !NODEP!
 
   implicit none
@@ -132,9 +132,11 @@ module vamp2
      real(default), dimension(:), allocatable :: efficiency
      type(vamp2_result_t) :: result
      type(vamp2_equivalences_t) :: equivalences
-     class(request_base_t), allocatable :: request
      logical :: event_prepared
      real(default), dimension(:), allocatable :: event_weight
+     !! BEGIN MPI
+     class(request_base_t), allocatable :: request
+     !! END MPI
    contains
      procedure, public :: final => vamp2_final
      procedure, public :: write => vamp2_write
@@ -144,7 +146,7 @@ module vamp2
      procedure, public :: set_limits => vamp2_set_limits
      procedure, public :: set_chain => vamp2_set_chain
      procedure, public :: set_equivalences => vamp2_set_equivalences
-     procedure :: prepare_parallel_integrate => vamp2_prepare_parallel_integrate
+     procedure :: allocate_request => vamp2_allocate_request
      procedure, public :: get_n_calls => vamp2_get_n_calls
      procedure, public :: get_integral => vamp2_get_integral
      procedure, public :: get_variance => vamp2_get_variance
@@ -156,6 +158,7 @@ module vamp2
      procedure, private :: apply_equivalences => vamp2_apply_equivalences
      procedure, public :: reset_result => vamp2_reset_result
      procedure, public :: integrate => vamp2_integrate
+     procedure, private :: prepare_integrate_iteration => vamp2_prepare_integrate_iteration
      procedure, private :: compute_result_and_efficiency => vamp2_compute_result_and_efficiency
      procedure, public :: generate_weighted => vamp2_generate_weighted_event
      procedure, public :: generate_unweighted => vamp2_generate_unweighted_event
@@ -571,29 +574,6 @@ contains
             & self%weight(ch)), self%config%n_calls_min_per_channel))
     end do
   contains
-    subroutine init_request ()
-      class(request_handler_t), pointer :: handler
-      integer :: ch
-      allocate (request_simple_t :: self%request)
-      call self%request%base_init (MPI_COMM_WORLD)
-      select type (req => self%request)
-      type is (request_simple_t)
-         call msg_message ("VAMP2: Simple Request Balancing.")
-      type is (request_caller_t)
-         call msg_bug ("Request caller not implemented yet.")
-      class default
-         call msg_bug ("Unknown extension of request_base.")
-      end select
-      if (self%request%is_master ()) then
-         !! Setup callbacks for master, once.
-         do ch = 1, self%config%n_channel
-            call self%integrator(ch)%allocate_handler (&
-                 handler_id = ch,&
-                 handler = handler)
-            call self%request%add_handler (ch, handler)
-         end do
-      end if
-    end subroutine init_request
   end subroutine vamp2_set_n_calls
 
   subroutine vamp2_set_limits (self, x_upper, x_lower)
@@ -625,23 +605,24 @@ contains
     self%equivalences = equivalences
   end subroutine vamp2_set_equivalences
 
-  !> Prepare parallel integrate.
+  !> Move allocated (and prepared!) request object into VAMP2.
   !!
-  !! A parallel integration requires a communicator, which may be duplicated in order to provide a safe communication context for the current VAMP2 instance.
-  !! Furthermore, setup request and callback objects.
-  subroutine vamp2_prepare_parallel_integrate (self, comm, duplicate_comm)
+  !! Then, provide type-dependent setup.
+  subroutine vamp2_allocate_request (self, request)
     class(vamp2_t), intent(inout) :: self
-    type(MPI_COMM), intent(in) :: comm
-    logical, intent(in), optional :: duplicate_comm
-    logical :: flag
-    flag = .true.; if (present (duplicate_comm)) flag = duplicate_comm
-    if (duplicate_comm) then
-       call MPI_COMM_DUP (comm, self%comm)
-    else
-       self%comm = comm
-    end if
-    !! Allocate request_base_t object and fill callback on master...
-  end subroutine vamp2_prepare_parallel_integrate
+    class(request_base_t), allocatable, intent(inout) :: request
+    class(request_handler_t), pointer :: vegas_result_handler
+    integer :: ch
+    call move_alloc (request, self%request)
+    select type (req => self%request)
+    type is (request_simple_t)
+       call msg_message ("VAMP2: Simple Request Balancing.")
+    type is (request_caller_t)
+       call msg_message ("VAMP2: Request with load balancing.")
+    class default
+       call msg_bug ("VAMP2: Unknown extension of request_base.")
+    end select
+  end subroutine vamp2_allocate_request
 
   elemental real(default) function vamp2_get_n_calls (self) result (n_calls)
     class(vamp2_t), intent(in) :: self
@@ -796,6 +777,9 @@ contains
     logical :: opt_verbose
     !! BEGIN MPI
     type(request_t) :: request
+    if (.not. allocated (self%request)) then
+       call msg_bug ("VAMP2: Request object not allocated.")
+    end if
     !! END MPI
     call set_options ()
     if (opt_verbose) then
@@ -803,18 +787,25 @@ contains
     end if
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
-       !! BEGIN MPI
-       !! Update request base depending on the actual allocated type.
-       call broadcast_weights_and_grids ()
-       call prepare_handler () !! MASTER
-       !! END MPI
-       call setup_func (func)
        call channel_iterator%init (1, self%config%n_channel)
+       call self%prepare_integrate_iteration (func)
+       !! BEGIN MPI
+       if (self%request%is_master ()) then
+          select type (req => self%request)
+          type is (request_caller_t)
+             request%terminate = .true.
+             call update_iter_and_rng (request, channel_iterator, rng)
+             !! channel_iter is already drained for master.
+             !! Do not descent into channel integration (later on).
+             call req%handle_workload ()
+          end select
+       end if
+       !! END MPI
        channel: do while (channel_iterator%is_iterable ())
           ch = channel_iterator%get_current ()
           !! BEGIN MPI
           call self%request%request_workload (request)
-          call advance_rng (channel_iterator, request, rng)
+          call update_iter_and_rng (request, channel_iterator, rng)
           if (request%terminate) exit channel
           if (request%group) call MPI_BARRIER (request%comm)
           ch = request%handler_id
@@ -825,7 +816,7 @@ contains
           !! BEGIN MPI
           if (request%group_master) then
              if (.not. self%request%is_master ())  &
-                  call allocate_handler (self%request, handler_id = ch)
+                  call allocate_handler (self%request, ch)
              call self%request%handle_and_release_workload (request)
           else
              call self%request%release_workload (request)
@@ -833,8 +824,21 @@ contains
           !! END MPI
           call channel_iterator%next_step ()
        end do channel
+       !! BEGIN MPI
+       if (.not. self%request%is_master () &
+            .and. .not. request%terminate) then
+          !! Sentinel against un-terminated worker.
+          !! However, do not interfere with RNG (status of current channel is undefined)
+          select type (req => self%request)
+          type is (request_caller_t)
+             call req%terminate ()
+          end select
+       end if
+       call self%request%barrier ()
+       call reduce_func_calls (func)
        call self%request%await_handler ()
        if (.not. self%request%is_master ()) cycle
+       !! END MPI
        call self%compute_result_and_efficiency ()
        associate (result => self%result)
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
@@ -873,102 +877,49 @@ contains
       if (present (verbose)) opt_verbose = verbose
     end subroutine set_options
 
-    subroutine setup_func (func)
-      class(vamp2_func_t), intent(inout) :: func
-      integer :: ch
-      do ch = 1, self%config%n_channel
-         func%wi(ch) = self%weight(ch)
-         !! \todo Use pointers instead of a deep copy.
-         func%grids(ch) = self%integrator(ch)%get_grid ()
-      end do
-    end subroutine setup_func
-
     !! BEGIN MPI
-    !! Balancer must be initiated after each time adapt_weights/refine is called,
-    !! thus, we initialize the balancer for each iteration.
-    ! subroutine allocate_balancer ()
-    !   class(request_balancer_t), allocatable :: balancer
-    !   logical, dimension(:), allocatable :: parallel_grid
-    !   if (.not. self%request%is_master ()) return
-    !   allocate (channel_balancer_t :: balancer)
-    !   parallel_grid = self%integrator%is_parallelizable () !! Allocate-on-assignment.
-    !   select type (balancer)
-    !   type is (channel_balancer_t)
-    !      call balancer%init (self%caller%get_n_workers (), self%config%n_channel)
-    !      call balancer%add_parallel_grid (parallel_grid)
-    !      call balancer%add_channel_weight (self%weight)
-    !   end select
-    !   call self%caller%add_balancer (balancer)
-    ! end subroutine allocate_balancer
-
-    subroutine prepare_handler ()
-      integer :: ch, worker
-      if (self%request%is_master ()) then
-         !! Master handler are setup once at initialization.
-         do ch = 1, self%config%n_channel
-            select type (req => self%request)
-            type is (request_simple_t)
-               worker = req%get_request_master (ch)
-               call req%call_handler (ch, worker)
-            type is (request_caller_t)
-               call msg_bug ("Request load balancing not yet implementet.")
-            class default
-               call msg_bug ("Unknown request_t extension.")
-            end select
-         end do
-      else !! Client always need to clear their respective handlers (as those may change during run time).
-         call self%request%clear_handler ()
-      end if
-    end subroutine prepare_handler
-
-    subroutine allocate_handler (req, handler_id)
+    subroutine allocate_handler (req, ch)
       class(request_base_t), intent(inout) :: req
-      integer, intent(in) :: handler_id
-      class(request_handler_t), pointer :: handler
-      call self%integrator(ch)%allocate_handler (handler_id, handler)
-      call req%add_handler (handler_id, handler)
+      integer, intent(in) :: ch
+      class(request_handler_t), pointer :: vegas_result_handler
+      call self%integrator(ch)%allocate_handler (&
+           handler_id = ch,&
+           handler = vegas_result_handler)
+      call req%add_handler (ch, vegas_result_handler)
     end subroutine allocate_handler
 
-    subroutine broadcast_weights_and_grids ()
-      type(vegas_grid_t) :: grid
-      integer :: size, ch
-      call MPI_COMM_SIZE (MPI_COMM_WORLD, size)
-      if (.not. size > 1) return
-      call MPI_BCAST (self%weight, self%config%n_channel, MPI_DOUBLE_PRECISION, 0,&
-           & MPI_COMM_WORLD)
-      do ch = 1, self%config%n_channel
-         grid = self%integrator(ch)%get_grid ()
-         call grid%broadcast (MPI_COMM_WORLD)
-         call self%integrator(ch)%set_grid (grid)
-      end do
-      call self%set_calls (self%config%n_calls)
-    end subroutine broadcast_weights_and_grids
-
-    subroutine advance_rng (iter, request, rng)
-      type(iterator_t), intent(inout) :: iter
+    !! Advance the random number generator for the skipped channels.
+    !!
+    !! We set current_channel = request%handler_id, hence, we need to advance
+    !! the random number generator until th iterator returns the same channel.
+    subroutine update_iter_and_rng (request, iter, rng)
       type(request_t), intent(in) :: request
+      type(iterator_t), intent(inout) :: iter
       class(rng_t), intent(inout) :: rng
       advance: do while (iter%is_iterable ())
          !! Advance up to iterator%end when in terminate mode,
-         !! else advance until we hit the previous channel (of request%handler_id):
+         !! else advance until we hit the previous channel (i.e. request%handler_id - 1):
          !! Proof: current_channel <= request%handler_id - 1
          if (.not. request%terminate) then
-            if (.not. iter%get_current () < request%handler_id) &
+            if (iter%get_current () >= request%handler_id) &
                  exit advance
          end if
          select type (rng)
          type is (rng_stream_t)
+            write (ERROR_UNIT, "(A,1X,I0)") "ADVANCE", iter%get_current ()
             call rng%next_substream ()
          end select
          call iter%next_step ()
       end do advance
-    end subroutine advance_rng
+    end subroutine update_iter_and_rng
 
     subroutine reduce_func_calls (func)
       class(vamp2_func_t), intent(inout) :: func
+      type(MPI_COMM) :: comm
       integer :: root_n_calls
+      call self%request%get_external_comm (comm)
       call MPI_reduce (func%n_calls, root_n_calls, 1, MPI_INTEGER, &
-           MPI_SUM, 0, MPI_COMM_WORLD)
+           MPI_SUM, 0, comm)
       if (self%request%is_master ()) then
          func%n_calls = root_n_calls
       else
@@ -976,6 +927,84 @@ contains
       end if
     end subroutine reduce_func_calls
   end subroutine vamp2_integrate
+
+  !> Prepare iteration, i.e. provide weights and grids to function object.
+  subroutine vamp2_prepare_integrate_iteration (self, func)
+    class(vamp2_t), intent(inout) :: self
+    class(vamp2_func_t), intent(inout) :: func
+    call fill_func_with_weights_and_grids (func)
+    !! BEGIN MPI
+    if (.not. allocated (self%request)) then
+       call msg_bug ("VAMP2: prepare integration iteration failed: unallocated request.")
+    end if
+    call broadcast_weights_and_grids ()
+    select type (req => self%request)
+    type is (request_simple_t)
+       call req%update (self%integrator%is_parallelizable ())
+       call init_all_handler (req)
+       call call_all_handler (req)
+       !! Add all handlers, call all handlers.
+    type is (request_caller_t)
+       call req%update_balancer (self%weight, self%integrator%is_parallelizable ())
+       call init_all_handler (req)
+    class default
+       call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
+    end select
+  contains
+    subroutine fill_func_with_weights_and_grids (func)
+      class(vamp2_func_t), intent(inout) :: func
+      integer :: ch
+      do ch = 1, self%config%n_channel
+         func%wi(ch) = self%weight(ch)
+         !! \todo Use pointers instead of a deep copy.
+         func%grids(ch) = self%integrator(ch)%get_grid ()
+      end do
+    end subroutine fill_func_with_weights_and_grids
+
+    subroutine broadcast_weights_and_grids ()
+      type(vegas_grid_t) :: grid
+      type(MPI_COMM) :: comm
+      integer :: ch
+      call self%request%get_external_comm (comm)
+      call MPI_BCAST (self%weight, self%config%n_channel, &
+           MPI_DOUBLE_PRECISION, 0, comm)
+      do ch = 1, self%config%n_channel
+         grid = self%integrator(ch)%get_grid ()
+         call grid%broadcast (comm)
+         call self%integrator(ch)%set_grid (grid)
+      end do
+      call self%set_calls (self%config%n_calls)
+    end subroutine broadcast_weights_and_grids
+
+    subroutine init_all_handler (req)
+      class(request_base_t), intent(inout) :: req
+      class(request_handler_t), pointer :: vegas_result_handler
+      integer :: ch
+      !! The master worker needs always all handler (callback objects)
+      !! in order to perform the communication to the client handler (callbacks).
+      if (.not. req%is_master ()) return
+      do ch = 1, self%config%n_channel
+         call self%integrator(ch)%allocate_handler (&
+              handler_id = ch,&
+              handler = vegas_result_handler)
+         call req%add_handler (ch, vegas_result_handler)
+      end do
+    end subroutine init_all_handler
+
+    subroutine call_all_handler (req)
+      class(request_base_t), intent(inout) :: req
+      integer :: ch
+      if (.not. req%is_master ()) return
+      do ch = 1, self%config%n_channel
+         select type (req)
+         type is (request_simple_t)
+            call req%call_handler (handler_id = ch, &
+                 source_rank = req%get_request_master (ch))
+         end select
+      end do
+    end subroutine call_all_handler
+    !! END MPI
+  end subroutine vamp2_prepare_integrate_iteration
 
   !> Compute the result and efficiency of the current status of the integrator.
   subroutine vamp2_compute_result_and_efficiency (self)

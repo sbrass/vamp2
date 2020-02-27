@@ -147,8 +147,10 @@ module vegas
      integer, dimension(:), allocatable :: bin
      integer, dimension(:), allocatable :: box
      type(vegas_result_t) :: result
+     !! BEGIN MPI
      type(MPI_COMM) :: comm
      logical :: parallel_grid
+     !! END MPI
    contains
      procedure, public :: final => vegas_final
      procedure, public :: set_limits => vegas_set_limits
