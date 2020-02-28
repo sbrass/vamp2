@@ -48,19 +48,17 @@ contains
     call handler%base_write (u)
   end subroutine result_handler_write
 
-  subroutine result_handler_handle (handler, source_rank, tag, comm)
+  subroutine result_handler_handle (handler, source_rank, comm)
     class(result_handler_t), intent(inout) :: handler
     integer, intent(in) :: source_rank
-    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     call handler%obj%receive (source_rank, handler%tag_offset, comm, handler%request)
     handler%finished = .false.
   end subroutine result_handler_handle
 
-  subroutine result_handler_client_handle (handler, dest_rank, tag, comm)
+  subroutine result_handler_client_handle (handler, dest_rank, comm)
     class(result_handler_t), intent(inout) :: handler
     integer, intent(in) :: dest_rank
-    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     call handler%obj%send (dest_rank, handler%tag_offset, comm, handler%request)
     handler%finished = .false.

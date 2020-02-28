@@ -82,11 +82,10 @@ module request_callback
      !! \param[in] source Integer rank of the source in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_handle (handler, source_rank, tag, comm)
+     subroutine request_handler_handle (handler, source_rank, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
        integer, intent(in) :: source_rank
-       integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_handle
 
@@ -95,11 +94,10 @@ module request_callback
      !! \param[in] rank Integer of the receiver in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
-     subroutine request_handler_client_handle (handler, dest_rank, tag, comm)
+     subroutine request_handler_client_handle (handler, dest_rank, comm)
        import :: request_handler_t, MPI_COMM
        class(request_handler_t), intent(inout) :: handler
        integer, intent(in) :: dest_rank
-       integer, intent(in) :: tag
        type(MPI_COMM), intent(in) :: comm
      end subroutine request_handler_client_handle
   end interface
@@ -132,8 +130,9 @@ contains
   !! Must be called during or after object-initialization.
   !!
   !! \param[inout] handler Handler must be intent inout, as the calling function may already manipulated the extended object.
-  !! \param[in] n_requests Number of MPI requests the objects needs to be able
-  !! to handle.
+  !! \param[in] n_requests Number of MPI requests the objects needs to be able to handle.
+  !! \param[in] tag_offset First tag to be used, all other must follow in an increasing manner until tag_offset + (N_r + 1).
+  !! Proof: tag ∈ {tag_offset, tag_offset + n_requests}.
   subroutine request_handler_allocate (handler, n_requests, tag_offset)
     class(request_handler_t), intent(inout) :: handler
     integer, intent(in) :: n_requests
@@ -314,7 +313,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%handle (source_rank = source_rank, tag = handler_id, comm = rhm%comm)
+    call handler%handle (source_rank = source_rank, comm = rhm%comm)
   end subroutine request_handler_manager_callback
 
   !> Call client-sided procedure of callback with handler_id.
@@ -328,7 +327,7 @@ contains
     class(request_handler_t), pointer :: handler
     if (.not. rhm%tree%has_key (handler_id)) return
     call rhm%handler_at (handler_id, handler)
-    call handler%client_handle (dest_rank = dest_rank, tag = handler_id, comm = rhm%comm)
+    call handler%client_handle (dest_rank = dest_rank, comm = rhm%comm)
   end subroutine request_handler_manager_client_callback
 end module request_callback
 

@@ -35,7 +35,7 @@ module vegas
   use format_defs, only: FMT_17
   use rng_base, only: rng_t
   use rng_stream, only: rng_stream_t
-  use request_callback, only: request_handler_t, MPI_TAG_OFFSET
+  use request_callback, only: request_handler_t
   use mpi_f08 !NODEP!
 
   implicit none
@@ -681,7 +681,7 @@ contains
     handler%finished = .false.
     !! Add one request for handling of the distribution d.
     n_requests = result%get_n_requests () + 1
-    tag_offset = handler_id * n_requests
+    tag_offset = max(handler_id - 1, 0) * n_requests
     call handler%allocate (n_requests, tag_offset)
   end subroutine vegas_handler_init
 
@@ -700,35 +700,29 @@ contains
     write (u, "(A)") "END D"
   end subroutine vegas_handler_write
 
-  subroutine vegas_handler_handle (handler, source_rank, tag, comm)
+  subroutine vegas_handler_handle (handler, source_rank, comm)
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: source_rank
-    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    integer :: n_result_requests
-    n_result_requests = handler%result%get_n_requests ()
-    call handler%result%receive (source_rank, tag * n_result_requests, comm, &
-       handler%request(:n_result_requests))
     !! Take the complete contiguous array memory.
     call MPI_Irecv (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, source_rank, tag * n_result_requests + 1, comm,&
-            & handler%request(n_result_requests + 1))
+            & MPI_DOUBLE_PRECISION, source_rank, handler%tag_offset, comm,&
+            & handler%request(1))
+    call handler%result%receive (source_rank, handler%tag_offset, comm, &
+         handler%request(2:))
     handler%finished = .false.
   end subroutine vegas_handler_handle
 
-  subroutine vegas_handler_client_handle (handler, dest_rank, tag, comm)
+  subroutine vegas_handler_client_handle (handler, dest_rank, comm)
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: dest_rank
-    integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
-    integer :: n_result_requests
-    n_result_requests = handler%result%get_n_requests ()
-    call handler%result%send (dest_rank, tag * n_result_requests, comm, &
-       handler%request(:n_result_requests))
-    !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
-            & MPI_DOUBLE_PRECISION, dest_rank, tag * n_result_requests + 1, comm,&
-            & handler%request(n_result_requests + 1))
+         & MPI_DOUBLE_PRECISION, dest_rank, handler%tag_offset, comm,&
+         & handler%request(1))
+    call handler%result%send (dest_rank, handler%tag_offset, comm, &
+         handler%request(2:))
+    !! Take the complete contiguous array memory.
     handler%finished = .false.
   end subroutine vegas_handler_client_handle
 

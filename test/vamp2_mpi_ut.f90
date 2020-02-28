@@ -110,11 +110,13 @@ program main
   call mc%set_calls (1000)
 
   call mc%integrate (func, rng, 3, verbose = .true., result=result, abserr=abserr)
-  write (ERROR_UNIT, "(A," // FMT_12 // ",A," // FMT_12 // ")") "Result:", result, "±", abserr
+  if (rank == 0) &
+       write (ERROR_UNIT, "(A," // FMT_12 // ",A," // FMT_12 // ")") "Result:", result, "±", abserr
 
   call mc%set_calls (200)
   call mc%integrate (func, rng, 3, verbose = .true., result=result, abserr=abserr)
-  write (ERROR_UNIT, "(A," // FMT_12 // ",1X,A,1X," // FMT_12 // ")") "Result:", result, "±", abserr
+  if (rank == 0) &
+       write (ERROR_UNIT, "(A," // FMT_12 // ",1X,A,1X," // FMT_12 // ")") "Result:", result, "±", abserr
 
   call mc%final ()
   call rng%final ()
