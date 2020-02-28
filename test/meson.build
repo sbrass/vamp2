@@ -114,7 +114,12 @@ vamp2_ut = executable('vamp2_ut', ['vamp2_ut.f90',
                                    test_utils],
                       link_language : 'fortran')
 vamp2_mpi_ut = executable('vamp2_mpi_ut', 'vamp2_mpi_ut.f90',
-                          link_with : [utils, rng, vegas, load_balancer],
+                          link_with : [utils,
+                                       rng,
+                                       vegas,
+                                       load_balancer,
+                                       test_utils,
+                                       signal],
                           link_language : 'fortran')
 test('VAMP2.', unit_test, args : [vamp2_ut, ref_vamp2])
 

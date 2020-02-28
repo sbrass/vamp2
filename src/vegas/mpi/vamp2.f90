@@ -788,9 +788,7 @@ contains
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
        call channel_iterator%init (1, self%config%n_channel)
-       PRINT *, "SENTINEL PREPARE"
        call self%prepare_integrate_iteration (func)
-       PRINT *, "SENTINEL INTEGRATE"
        !! BEGIN MPI
        if (self%request%is_master ()) then
           select type (req => self%request)
@@ -817,7 +815,7 @@ contains
           !! END MPI
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
-               & func, rng, iterations, refine_grid = .false., verbose = verbose)
+               & func, rng, iterations, refine_grid = .false., verbose = .false.)
           !! BEGIN MPI
           if (request%group_master) then
              if (.not. self%request%is_master ())  &
@@ -840,7 +838,6 @@ contains
           end select
        end if
        call reduce_func_calls (func)
-       call self%request%write ()
        call self%request%await_handler ()
        call self%request%barrier ()
        if (.not. self%request%is_master ()) cycle
@@ -943,7 +940,6 @@ contains
        call msg_bug ("VAMP2: prepare integration iteration failed: unallocated request.")
     end if
     call broadcast_weights_and_grids ()
-    PRINT *, "SENTINEL UPDATE"
     select type (req => self%request)
     type is (request_simple_t)
        call req%update (self%integrator%is_parallelizable ())
@@ -1007,7 +1003,6 @@ contains
       do ch = 1, self%config%n_channel
          select type (req)
          type is (request_simple_t)
-            print *, "REQUEST MASTER", ch, req%get_request_master (ch)
             call req%call_handler (handler_id = ch, &
                  source_rank = req%get_request_master (ch))
          end select
