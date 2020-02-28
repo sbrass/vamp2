@@ -129,7 +129,8 @@ contains
          request%comm = req%external_comm
          request%group = .true.
          !! The object communicator is master.
-         request%group_master = req%get_request_master (channel)
+         request%group_master = &
+              (req%get_request_master (channel) == rank)
          request%callback = req%is_master ()
       else
          request%comm = req%external_comm
