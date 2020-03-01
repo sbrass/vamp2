@@ -13,10 +13,6 @@ module vamp2
 
   use vegas
 
-  !! BEGIN REMOVE
-  use logging
-  !! END REMOVE
-
   use request_base
   use request_simple
   use request_caller
@@ -497,7 +493,7 @@ contains
     do ch = 1, n_channel
        self%integrator(ch) = vegas_t (n_dim, alpha, n_bins_max, 1, mode)
     end do
-    self%weight = 1 / self%config%n_channel
+    self%weight = 1._default / self%config%n_channel
     call self%reset_result ()
     allocate (self%event_weight(self%config%n_channel), source = 0._default)
     self%event_prepared = .false.
@@ -573,7 +569,6 @@ contains
        call self%integrator(ch)%set_calls (max (nint (self%config%n_calls *&
             & self%weight(ch)), self%config%n_calls_min_per_channel))
     end do
-  contains
   end subroutine vamp2_set_n_calls
 
   subroutine vamp2_set_limits (self, x_upper, x_lower)
@@ -787,6 +782,7 @@ contains
     end if
     if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
+       call self%request%barrier ()
        call channel_iterator%init (1, self%config%n_channel)
        call self%prepare_integrate_iteration (func)
        !! BEGIN MPI
@@ -801,10 +797,13 @@ contains
           end select
        end if
        !! END MPI
+       write (ERROR_UNIT, '(A)') "CH | T | G | GM | C | COMM"
        channel: do while (channel_iterator%is_iterable ())
+          !! No barrier here!!!
           ch = channel_iterator%get_current ()
           !! BEGIN MPI
           call self%request%request_workload (request)
+          write (ERROR_UNIT, *) "[REQUEST]", request
           call update_iter_and_rng (request, channel_iterator, rng)
           if (request%terminate) exit channel
           if (request%group) call MPI_BARRIER (request%comm)
@@ -834,35 +833,37 @@ contains
           !! However, do not interfere with RNG (status of current channel is undefined)
           select type (req => self%request)
           type is (request_caller_t)
+             write (ERROR_UNIT, "(A)") "POST-INTREGATE | TERMINATE"
              call req%terminate ()
           end select
        end if
        call reduce_func_calls (func)
        call self%request%await_handler ()
        call self%request%barrier ()
-       if (.not. self%request%is_master ()) cycle
-       !! END MPI
-       call self%compute_result_and_efficiency ()
-       associate (result => self%result)
-         cumulative_int = result%sum_int_wgtd / result%sum_wgts
-         cumulative_std = sqrt (1 / result%sum_wgts)
-         if (opt_verbose) then
-            write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
-                 & it, self%config%n_calls, cumulative_int, cumulative_std, &
-                 & result%chi2, result%efficiency
-            call msg_message ()
-         end if
-       end associate
-       if (opt_adapt_weights) then
-          call self%adapt_weights ()
-       end if
-       if (opt_refine_grids) then
-          if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
-             call self%apply_equivalences ()
+       if (self%request%is_master ()) then
+          !! END MPI
+          call self%compute_result_and_efficiency ()
+          associate (result => self%result)
+            cumulative_int = result%sum_int_wgtd / result%sum_wgts
+            cumulative_std = sqrt (1 / result%sum_wgts)
+            if (opt_verbose) then
+               write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
+                    & it, self%config%n_calls, cumulative_int, cumulative_std, &
+                    & result%chi2, result%efficiency
+               call msg_message ()
+            end if
+          end associate
+          if (opt_adapt_weights) then
+             call self%adapt_weights ()
           end if
-          do ch = 1, self%config%n_channel
-             call self%integrator(ch)%refine ()
-          end do
+          if (opt_refine_grids) then
+             if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
+                call self%apply_equivalences ()
+             end if
+             do ch = 1, self%config%n_channel
+                call self%integrator(ch)%refine ()
+             end do
+          end if
        end if
     end do iteration
     if (present (result)) result = cumulative_int
@@ -909,7 +910,6 @@ contains
          end if
          select type (rng)
          type is (rng_stream_t)
-            write (ERROR_UNIT, "(A,1X,I0)") "ADVANCE", iter%get_current ()
             call rng%next_substream ()
          end select
          call iter%next_step ()
@@ -940,18 +940,22 @@ contains
        call msg_bug ("VAMP2: prepare integration iteration failed: unallocated request.")
     end if
     call broadcast_weights_and_grids ()
-    select type (req => self%request)
-    type is (request_simple_t)
-       call req%update (self%integrator%is_parallelizable ())
-       call init_all_handler (req)
-       call call_all_handler (req)
-       !! Add all handlers, call all handlers.
-    type is (request_caller_t)
-       call req%update_balancer (self%weight, self%integrator%is_parallelizable ())
-       call init_all_handler (req)
-    class default
-       call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
-    end select
+    if (self%request%is_master ()) then
+       select type (req => self%request)
+       type is (request_simple_t)
+          call req%update (self%integrator%is_parallelizable ())
+          call init_all_handler (req)
+          call call_all_handler (req)
+          !! Add all handlers, call all handlers.
+       type is (request_caller_t)
+          call req%update_balancer (self%weight, self%integrator%is_parallelizable ())
+          call init_all_handler (req)
+       class default
+          call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
+       end select
+    else
+       call self%request%reset ()
+    end if
     !! END MPI
     call fill_func_with_weights_and_grids (func)
   contains

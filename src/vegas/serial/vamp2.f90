@@ -34,6 +34,7 @@ module vamp2
   use format_utils, only: write_separator, write_indent
   use format_defs, only: FMT_17
   use diagnostics
+  use iterator
   use rng_base
   use rng_stream, only: rng_stream_t
 
@@ -751,37 +752,34 @@ contains
     self%result%efficiency = 0.
   end subroutine vamp2_reset_result
 
-  subroutine vamp2_integrate (self, func, rng, iterations, opt_reset_result,&
-       & opt_refine_grid, opt_adapt_weight, opt_verbose, result, abserr)
+  subroutine vamp2_integrate (self, func, rng, iterations, reset_result,&
+       & refine_grids, adapt_weights, verbose, result, abserr)
     class(vamp2_t), intent(inout) :: self
     class(vamp2_func_t), intent(inout) :: func
     class(rng_t), intent(inout) :: rng
     integer, intent(in), optional :: iterations
-    logical, intent(in), optional :: opt_reset_result
-    logical, intent(in), optional :: opt_refine_grid
-    logical, intent(in), optional :: opt_adapt_weight
-    logical, intent(in), optional :: opt_verbose
+    logical, intent(in), optional :: reset_result
+    logical, intent(in), optional :: refine_grids
+    logical, intent(in), optional :: adapt_weights
+    logical, intent(in), optional :: verbose
     real(default), optional, intent(out) :: result, abserr
     integer :: it, ch
     real(default) :: total_integral, total_sq_integral, total_variance, chi, wgt
+    type(iterator_t) :: channel_iterator
     real(default) :: cumulative_int, cumulative_std
-    logical :: reset_result = .true.
-    logical :: adapt_weight = .true.
-    logical :: refine_grid = .true.
-    logical :: verbose = .false.
-  
-    if (present (iterations)) self%config%iterations = iterations
-    if (present (opt_reset_result)) reset_result = opt_reset_result
-    if (present (opt_adapt_weight)) adapt_weight = opt_adapt_weight
-    if (present (opt_refine_grid)) refine_grid = opt_refine_grid
-    if (present (opt_verbose)) verbose = opt_verbose
+    logical :: opt_reset_result
+    logical :: opt_adapt_weights
+    logical :: opt_refine_grids
+    logical :: opt_verbose
+    call set_options ()
     cumulative_int = 0.
     cumulative_std = 0.
-    if (reset_result) call self%reset_result ()
-    if (verbose) then
+    if (opt_reset_result) call self%reset_result ()
+    if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
     iteration: do it = 1, self%config%iterations
+       call channel_iterator%init (1, self%config%n_channel)
        total_integral = 0._default
        total_sq_integral = 0._default
        total_variance = 0._default
@@ -789,13 +787,13 @@ contains
           func%wi(ch) = self%weight(ch)
           func%grids(ch) = self%integrator(ch)%get_grid ()
        end do
-       channel: do ch = 1, self%config%n_channel
-        
+       channel: do while (channel_iterator%is_iterable ())
+          ch = channel_iterator%get_current ()
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
-               & func, rng, iterations, opt_refine_grid = .false., opt_verbose = verbose)
+               & func, rng, iterations, refine_grid = .false., verbose = .false.)
+          call channel_iterator%next_step ()
        end do channel
-     
        total_integral = dot_product (self%weight, self%integrator%get_integral ())
        total_sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
        total_variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
@@ -828,17 +826,17 @@ contains
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
          cumulative_std = sqrt (1. / result%sum_wgts)
          call calculate_efficiency ()
-         if (verbose) then
+         if (opt_verbose) then
             write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                  & it, self%config%n_calls, cumulative_int, cumulative_std, &
                  & self%result%chi2, self%result%efficiency
             call msg_message ()
          end if
        end associate
-       if (adapt_weight) then
+       if (opt_adapt_weights) then
           call self%adapt_weights ()
        end if
-       if (refine_grid) then
+       if (opt_refine_grids) then
           if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
              call self%apply_equivalences ()
           end if
@@ -850,6 +848,18 @@ contains
     if (present (result)) result = cumulative_int
     if (present (abserr)) abserr = abs (cumulative_std)
   contains
+    subroutine set_options ()
+      if (present (iterations)) self%config%iterations = iterations
+      opt_reset_result = .true.
+      if (present (reset_result)) opt_reset_result = reset_result
+      opt_adapt_weights = .true.
+      if (present (adapt_weights)) opt_adapt_weights = adapt_weights
+      opt_refine_grids = .true.
+      if (present (refine_grids)) opt_refine_grids = refine_grids
+      opt_verbose = .false.
+      if (present (verbose)) opt_verbose = verbose
+    end subroutine set_options
+
     subroutine calculate_efficiency ()
       self%result%max_abs_f = dot_product (self%weight, &
            & self%integrator%get_max_abs_f ())

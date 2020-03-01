@@ -732,6 +732,7 @@ contains
   subroutine vegas_handler_final (handler)
     type(vegas_handler_t), intent(inout) :: handler
     nullify (handler%result)
+    nullify (handler%d)
   end subroutine vegas_handler_final
 
   type(vegas_t) function vegas_init (n_dim, alpha, n_bins_max, iterations, mode) result (self)

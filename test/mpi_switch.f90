@@ -100,11 +100,12 @@ program main
      type is (request_caller_t)
         request%terminate = .true.
         call update_iter_and_rng (request, channel_iter, rng)
+        !! channel_iter is already drained for master.
+        !! Do not descent into channel integration (later on).
         call req%handle_workload ()
      end select
   end if
 
-  !! channel_iter is already drained for master.
   channel: do while (channel_iter%is_iterable ())
      call req%request_workload (request)
      call update_iter_and_rng (request, channel_iter, rng)

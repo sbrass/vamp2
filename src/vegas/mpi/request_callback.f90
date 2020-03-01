@@ -164,7 +164,6 @@ contains
     class(request_handler_t), intent(inout) :: handler
     integer :: error
     if (handler%finished) return
-    call handler%write ()
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
        call msg_bug ("Request: Error occured during waitall on handler.")
@@ -258,6 +257,8 @@ contains
     class(request_handler_t), pointer :: handler
     call rhm%handler_at (handler_id, handler)
     flag = handler%testall ()
+    write (ERROR_UNIT, "(A,1X,I0)") "[HANDLER_ID]", handler_id
+    call handler%write ()
   end function request_handler_manager_test
 
   subroutine request_handler_manager_wait (rhm, handler_id)
@@ -266,6 +267,8 @@ contains
     class(request_handler_t), pointer :: handler
     call rhm%handler_at (handler_id, handler)
     call handler%waitall ()
+    write (ERROR_UNIT, "(A,1X,I0)") "[HANDLER_ID]", handler_id
+    call handler%write ()
   end subroutine request_handler_manager_wait
 
   subroutine request_handler_manager_waitall (rhm)

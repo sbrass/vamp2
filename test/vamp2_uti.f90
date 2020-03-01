@@ -226,7 +226,7 @@ contains
     call rng%write (u)
 
     write (u, "(A)")
-    write (u, "(A)") "* Initialise MC integrator with n_channel = 1 and n_dim = 3"
+    write (u, "(A)") "* Initialise MC integrator with n_channel = 2 and n_dim = 2"
     write (u, "(A)")
 
     allocate (vamp2_test_func_2_t :: func)

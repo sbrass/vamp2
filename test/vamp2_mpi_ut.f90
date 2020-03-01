@@ -51,6 +51,7 @@ program main
 
   use request_base
   use request_simple
+  use request_caller
 
   use test_utils
 
@@ -96,9 +97,12 @@ program main
   allocate (test_func_t :: func)
   call func%init (n_dim = 2, n_channel = 2)
 
-  allocate (request_simple_t :: req)
+  ! allocate (request_simple_t :: req)
+  allocate (request_caller_t :: req)
   select type (req)
   type is (request_simple_t)
+     call req%init (MPI_COMM_WORLD, n_channels = 2)
+  type is (request_caller_t)
      call req%init (MPI_COMM_WORLD, n_channels = 2)
   end select
 

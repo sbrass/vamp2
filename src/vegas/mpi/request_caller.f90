@@ -105,10 +105,11 @@ contains
           !! Formally differentiate between worker_id and source.
           worker_id = source
           if (.not. allocated (req%balancer)) tag = MPI_TAG_TERMINATE
+          write (ERROR_UNIT, "(A,1X,I0)") "TAG |", tag
+          flush(ERROR_UNIT)
           select case (tag)
           case (MPI_TAG_REQUEST)
-             write (ERROR_UNIT, "(A)") "MPI_TAG_REQUEST"
-             write (ERROR_UNIT, "(A,3(1X,I0))") "[REQUEST]", source, tag, handler
+             write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_REQUEST", source
              write (ERROR_UNIT, "(A,1X,L1)") "--------->", req%balancer%is_assignable (source)
              if (req%balancer%is_assignable (worker_id)) then
                 call req%balancer%assign_worker (worker_id, handler)
@@ -122,6 +123,7 @@ contains
                 write (ERROR_UNIT, "(A)") "---------> TERMINATE"
                 call req%state%terminate (source)
              end if
+             write (ERROR_UNIT, "(A,3(1X,I0))") "[REQUEST]", source, tag, handler
           case (MPI_TAG_HANDLER_AND_RELEASE)
              write (ERROR_UNIT, "(A,2(1X,I0))") "MPI_TAG_HANDLER_AND_RELEASE", handler, source
              !! \note call_handler expects an worker_id ∈ {1, …, N} and shifts it to a rank index!
@@ -143,9 +145,13 @@ contains
              call msg_warning ()
           end select
        end do
+       !! Termination state can be changed by clients, need to check again before pulling new requests.
+       if (req%state%is_terminated ()) exit
        call req%state%receive_request ()
     end do
-    call req%state%free_request ()
+    !! If we are here, there should be no leftover communnication.
+    !! Hence, we must check whether there is no left-over communication call (from server-side).
+    ! call req%state%free_request ()
   contains
     subroutine provide_request_group (handler_id, dest_rank)
       integer, intent(in) :: handler_id
