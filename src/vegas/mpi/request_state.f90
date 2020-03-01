@@ -16,9 +16,10 @@ module request_state
        MPI_TAG_RELEASE = 2, &
        MPI_TAG_HANDLER_AND_RELEASE = 4, &
        MPI_TAG_TERMINATE = 8, &
-       MPI_TAG_ASSIGN_SINGLE = 16, &
-       MPI_TAG_ASSIGN_GROUP = 32, &
-       MPI_TAG_COMMUNICATOR_GROUP = 64
+       MPI_TAG_CLIENT_TERMINATE = 16, &
+       MPI_TAG_ASSIGN_SINGLE = 32, &
+       MPI_TAG_ASSIGN_GROUP = 64, &
+       MPI_TAG_COMMUNICATOR_GROUP = 128
 
   type :: request_state_t
      private
@@ -37,7 +38,9 @@ module request_state
    contains
      procedure :: init => request_state_init
      procedure :: write => request_state_write
+     procedure :: reset => request_state_reset
      procedure :: is_terminated => request_state_is_terminated
+     procedure :: set_terminated => request_state_set_terminated
      procedure :: terminate => request_state_terminate
      procedure :: client_terminate => request_state_client_terminate
      procedure :: receive_request => request_state_receive_request
@@ -91,13 +94,35 @@ contains
     write (u, "(A,999(1X,L1))") "TERMINATED", state%terminated
   end subroutine request_state_write
 
+  subroutine request_state_reset (state)
+    class(request_state_t), intent(inout) :: state
+    integer :: rank
+    state%n_workers_done = state%n_workers
+    call state%request_iterator%init (1, state%n_workers)
+    state%handler = MPI_EMPTY_HANDLER
+    state%indices = [(rank, rank = 1, state%n_workers)]
+    state%terminated = .false.
+  end subroutine request_state_reset
+
   ! pure function request_state_is_terminated (state) result (flag)
   function request_state_is_terminated (state) result (flag)
     class(request_state_t), intent(in) :: state
     logical :: flag
-    print *, "TERMINATED: ", state%terminated
+    write (ERROR_UNIT, "(A,1X,L1)") "STATE TERMINATED: ", state%terminated
     flag = all (state%terminated)
   end function request_state_is_terminated
+
+  !> Set rank to be terminated (however, do not communicate it).
+  !!
+  !! This is an EVIL procedure, as it operates only locally on the master
+  !! and does not communicate its purpose.
+  !! However, in order to allow termination requests from client-side
+  !! we need to manipulate the specific rank states.
+  subroutine request_state_set_terminated (state, rank)
+    class(request_state_t), intent(inout) :: state
+    integer, intent(in) :: rank
+    state%terminated(rank) = .true.
+  end subroutine request_state_set_terminated
 
   subroutine request_state_terminate (state, rank)
     class(request_state_t), intent(inout) :: state
@@ -109,14 +134,14 @@ contains
        write (msg_buffer, "(A,1X,I3)") "Request: Error occured during terminate, RANK", rank
        call msg_bug ()
     end if
-    state%terminated(rank) = .true.
+    call state%set_terminated (rank)
   end subroutine request_state_terminate
 
   subroutine request_state_client_terminate (state)
     class(request_state_t), intent(in) :: state
     integer :: error
     call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
-         0, MPI_TAG_TERMINATE, state%comm, error)
+         0, MPI_TAG_CLIENT_TERMINATE, state%comm, error)
     if (error /= 0) then
        write (msg_buffer, "(A,1X,I3)") "Request: Error occured during client-sided terminate"
        call msg_bug ()
@@ -125,17 +150,16 @@ contains
 
   subroutine request_state_receive_request (state)
     class(request_state_t), intent(inout) :: state
-    integer :: i, rank, handler
+    integer :: i, rank
     integer :: error
     do i = 1, state%n_workers_done
        rank = state%indices(i)
-       handler = state%handler(rank)
-       print *, "RANK: ", rank, " | RECEIVE REQUEST"
-       call MPI_IRECV (handler, 1, MPI_INTEGER, &
+       write (ERROR_UNIT, "(A,1X,I0,1X,A)") "RANK: ", rank, " | RECEIVE REQUEST"
+       call MPI_IRECV (state%handler(rank), 1, MPI_INTEGER, &
             rank, MPI_ANY_TAG, state%comm, state%request(rank), error)
        if (error /= 0) then
           write (msg_buffer, "(A,2(A,1X,I6))") "Request: Error occured during receive request, &
-             & RANK", rank, "HANDLER", handler
+             & RANK", rank, "HANDLER", state%handler(rank)
           call msg_bug ()
        end if
     end do
@@ -233,8 +257,10 @@ contains
     type(MPI_STATUS), intent(out) :: status
     call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
          0, MPI_TAG_REQUEST, state%comm)
+    write (ERROR_UNIT, "(A)") "STATE SERVE-SEND | MPI_TAG_REQUEST"
     call MPI_RECV (handler_id, 1, MPI_INTEGER, &
          0, MPI_ANY_TAG, state%comm, status)
+    write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "STATE SERVE-RECEIVE |", status%MPI_SOURCE, status%MPI_TAG
   end subroutine request_state_client_serve
 
   !> Free handler from worker.

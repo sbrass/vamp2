@@ -375,7 +375,13 @@ contains
              call msg_bug ("Balancer: Number of state workers&
                   & exceeding global number of workers")
           end if
-          balancer%worker(i_worker)%state = i
+          associate (worker => balancer%worker(i_worker))
+            worker%state = i
+            !! Reset worker attributes.
+            worker%resource = 0
+            worker%n_resources = 0
+            worker%assigned = .false.
+          end associate
           i_worker = i_worker + 1
        end do
     end do

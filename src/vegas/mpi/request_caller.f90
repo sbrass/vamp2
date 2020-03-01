@@ -79,6 +79,7 @@ contains
     logical, dimension(:), intent(in) :: parallel_grid
     !! \note bug if not allocated?
     if (.not. allocated (req%balancer)) return
+    call req%state%reset ()
     call req%reset ()
     select type (balancer => req%balancer)
     type is (channel_balancer_t)
@@ -131,9 +132,12 @@ contains
              write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_RELEASE", source
              call req%balancer%free_worker (worker_id)
           case (MPI_TAG_TERMINATE)
-             !! Allow workers to request their own termination.
              write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_TERMINATE", source
              call req%state%terminate (source)
+          case (MPI_TAG_CLIENT_TERMINATE)
+             !! Allow workers to request their own termination.
+             write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_CLIENT_TERMINATE", source
+             call req%state%set_terminated (source)
           case default
              write (msg_buffer, "(I6,1X,A,1X,I6,1X,A,1X,I0)") source, "INVALID TAG -> ", tag, "MSG", handler
              call msg_warning ()
@@ -200,12 +204,14 @@ contains
     if (.not. req%handler%has_handler (request%handler_id)) then
        call msg_bug ("Request: Handler is not registered for this worker.")
     end if
+    write (ERROR_UNIT, "(A,1X,I0)") "HANDLE AND RELEASE", request%handler_id
     call req%release_workload (request)
     call req%call_client_handler (request%handler_id)
   end subroutine request_caller_handle_and_release_workload
 
   subroutine request_caller_terminate (req)
     class(request_caller_t), intent(inout) :: req
+    if (req%is_master ()) return
     call req%state%client_terminate ()
   end subroutine request_caller_terminate
 end module request_caller
