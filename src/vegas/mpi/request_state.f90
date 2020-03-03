@@ -108,8 +108,8 @@ contains
   function request_state_is_terminated (state) result (flag)
     class(request_state_t), intent(in) :: state
     logical :: flag
-    write (ERROR_UNIT, "(A,1X,L1)") "STATE TERMINATED: ", state%terminated
     flag = all (state%terminated)
+    write (ERROR_UNIT, "(A,1X,L1)") "STATE TERMINATED: ", flag
   end function request_state_is_terminated
 
   !> Set rank to be terminated (however, do not communicate it).
@@ -148,10 +148,23 @@ contains
     end if
   end subroutine request_state_client_terminate
 
+  !> Receive requests from non-terminated workers.
+  !!
+  !! Before receiving new requests, santize arrays of received ranks from terminated ones.
   subroutine request_state_receive_request (state)
     class(request_state_t), intent(inout) :: state
     integer :: i, rank
     integer :: error
+    if (state%is_terminated ()) return
+    !! Remove terminated ranks from done workers.
+    do i = 1, state%n_workers_done
+       rank = state%indices(i)
+       if (.not. state%terminated(rank)) cycle
+       state%request(rank) = MPI_REQUEST_NULL
+       state%indices(rank:state%n_workers_done - 1) = state%indices(rank + 1:state%n_workers_done)
+       state%n_workers_done = state%n_workers_done - 1
+    end do
+    !! Receive new requests from (still active) workers.
     do i = 1, state%n_workers_done
        rank = state%indices(i)
        write (ERROR_UNIT, "(A,1X,I0,1X,A)") "RANK: ", rank, " | RECEIVE REQUEST"
@@ -168,6 +181,7 @@ contains
   subroutine request_state_await_request (state)
     class(request_state_t), intent(inout) :: state
     integer :: error
+    if (state%is_terminated ()) return
     !! Proof: REQUEST(i), i ∈ {1, N_workers}, i is equivalent to rank.
     !! Proof: INDICES(j), STATUS(j), j ∈ {1, N_workers_done}
     !! Proof: INDICES(j) → i, injectiv.
