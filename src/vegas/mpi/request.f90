@@ -158,7 +158,7 @@ contains
     call move_alloc (rank, cache%rank)
     call MPI_GROUP_INCL (cache%parent_group, size (cache%rank), cache%rank, group)
     call MPI_GROUP_COMPARE (cache%group, group, result)
-    if (result == MPI_UNEQUAL) then
+    if (result /= MPI_IDENT) then
        cache%group = group
        if (cache%comm /= MPI_COMM_NULL) call MPI_COMM_FREE (cache%comm)
        !! Group-local operation. However, time consuming.
@@ -167,8 +167,8 @@ contains
        if (error /= 0) then
           call msg_bug ("Error occured during communicator creation...")
        end if
-    else
-       call msg_message ("CACHE UPDATE: GROUPS ARE (NEARLY) IDENTICAL")
+    ! else
+       ! call msg_message ("CACHE UPDATE: GROUPS ARE (NEARLY) IDENTICAL")
     end if
   end subroutine request_group_cache_update
 
