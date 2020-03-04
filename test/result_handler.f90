@@ -1,6 +1,8 @@
 module result_handler
   use iso_fortran_env, only: r64 => REAL64, ERROR_UNIT
 
+  use format_defs, only: FMT_17
+
   use mpi_f08
   use request_callback, only: request_handler_t
 
@@ -13,6 +15,7 @@ module result_handler
      real(r64) :: sum_integral = 0
      real(r64) :: sum_integral_sq = 0
    contains
+     procedure :: write => result_write
      procedure :: send => result_send
      procedure :: receive => result_receive
      procedure :: get_n_requests => result_get_n_requests
@@ -73,6 +76,16 @@ contains
     type(result_handler_t), intent(inout) :: handler
     nullify (handler%obj)
   end subroutine result_handler_final
+
+  subroutine result_write (result, unit)
+    class(result_t), intent(in) :: result
+    integer, intent(in), optional :: unit
+    integer :: u
+    u = ERROR_UNIT; if (present (unit)) u = unit
+    write (ERROR_UNIT, "(A,1X,I0)") "SAMPLES", result%samples
+    write (ERROR_UNIT, "(A,1X," // FMT_17 // ")") "SUM INTEGRAL", result%sum_integral
+    write (ERROR_UNIT, "(A,1X," // FMT_17 // ")") "SUM INTEGRAL SQ", result%sum_integral_sq
+  end subroutine result_write
 
   !> Asymmetric send and receive.
   subroutine result_send (result, receiver, tag_offset, comm, reqs)

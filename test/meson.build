@@ -24,7 +24,8 @@ test('Binary tree.', binary_tree_1, should_fail : true)
 
 if mpi_enabled
   result_handler = library('result_handler', 'result_handler.f90',
-                           link_with : load_balancer)
+                           link_with : [load_balancer,
+                                       utils])
 
   mpi_caller_1 = executable('mpi_caller_1', 'mpi_caller_1.f90',
                             link_with : [load_balancer,
