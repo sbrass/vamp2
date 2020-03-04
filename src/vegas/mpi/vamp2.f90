@@ -940,22 +940,22 @@ contains
        call msg_bug ("VAMP2: prepare integration iteration failed: unallocated request.")
     end if
     call broadcast_weights_and_grids ()
-    if (self%request%is_master ()) then
-       select type (req => self%request)
-       type is (request_simple_t)
-          call req%update (self%integrator%is_parallelizable ())
-          call init_all_handler (req)
-          call call_all_handler (req)
-          !! Add all handlers, call all handlers.
-       type is (request_caller_t)
+    select type (req => self%request)
+    type is (request_simple_t)
+       call req%update (self%integrator%is_parallelizable ())
+       call init_all_handler (req)
+       call call_all_handler (req)
+       !! Add all handlers, call all handlers.
+    type is (request_caller_t)
+       if (req%is_master ()) then
           call req%update_balancer (self%weight, self%integrator%is_parallelizable ())
           call init_all_handler (req)
-       class default
-          call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
-       end select
-    else
-       call self%request%reset ()
-    end if
+       else
+          call self%request%reset ()
+       end if
+    class default
+       call msg_bug ("VAMP2: prepare integration iteration failed: unknown request type.")
+    end select
     !! END MPI
     call fill_func_with_weights_and_grids (func)
   contains
