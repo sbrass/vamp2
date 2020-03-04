@@ -56,13 +56,17 @@ endif
 
 
 ## Test MPI_F08
+ompi = dependency('ompi', version : '>=2.0.0')
 if get_option('mpi').enabled()
+  if not ompi.found()
+    error('OpenMPI not found.')
+  endif
   code = '''
          module test
            use mpi_f08
          end module test
          '''
-  if not fortran_compiler.compiles(code, name : 'Fortran has module mpi_f08')
+  if not fortran_compiler.compiles(code, name : 'OpenMPI has support for mpi_f08 module')
     error('Module mpi_f08 not found.')
   endif
   mpi_enabled = true

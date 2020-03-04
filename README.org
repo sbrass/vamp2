@@ -3,3 +3,44 @@
   We provide a full modern Fortran 2008 reimplementation for the VAMP algorithm proposed and implemented originally by Thorsten Ohl.
 
   Additionally, the new implementation provides a fully functional MPI parallelization using features from the MPI-3.1 standard.
+
+** Configuration
+
+   Requirements: gfortran, meson and ninja
+
+*** Serial Version
+
+    Default buildtype: debug
+
+    #+BEGIN_SRC shell
+      meson build
+    #+END_SRC
+
+    Change to release (with optimization):
+    #+BEGIN_SRC shell
+      meson --buildtype=release build
+    #+END_SRC
+
+
+*** Parallel Version
+
+    Requirements: MPI-3.1-compatible library, e.g. OpenMPI >= 2.x.x + =mpi_f08=-support
+
+    #+BEGIN_SRC shell
+      FC=mpifort meson -Dmpi=enabled --buildtype=release release
+    #+END_SRC
+
+** Build und Test
+   
+   Change to build directory and run Ninja,
+   #+BEGIN_SRC shell
+     cd release 
+     ninja [-v]
+   #+END_SRC
+
+   Run unit tests, when feasible,
+   #+BEGIN_SRC shell
+     ninja test
+   #+END_SRC
+
+** TODO Installation
