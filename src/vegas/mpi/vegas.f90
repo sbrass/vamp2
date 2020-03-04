@@ -711,6 +711,7 @@ contains
             & handler%request(1))
     call handler%result%receive (source_rank, handler%tag_offset, comm, &
          handler%request(2:))
+    handler%activated = .true.
     handler%finished = .false.
   end subroutine vegas_handler_handle
 
@@ -718,12 +719,13 @@ contains
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: dest_rank
     type(MPI_COMM), intent(in) :: comm
+    !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
          & MPI_DOUBLE_PRECISION, dest_rank, handler%tag_offset, comm,&
          & handler%request(1))
     call handler%result%send (dest_rank, handler%tag_offset, comm, &
          handler%request(2:))
-    !! Take the complete contiguous array memory.
+    handler%activated = .true.
     handler%finished = .false.
   end subroutine vegas_handler_client_handle
 

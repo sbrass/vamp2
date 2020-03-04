@@ -34,6 +34,7 @@ module request_callback
      integer :: tag_offset = 0
      type(MPI_REQUEST), dimension(:), allocatable :: request
      type(MPI_STATUS), dimension(:), allocatable :: status
+     logical :: activated = .false.
      logical :: finished = .false.
    contains
      procedure :: base_write => request_handler_base_write
@@ -79,6 +80,7 @@ module request_callback
      !! The message tag can be used in order to uniquify the respective messages between master and slave.
      !! E.g. by explicitly setting it, or by using it in a computation i * N_R + j, i ∈ {1, …, N} and j ∈ {1, …, N_R}.
      !!
+     !! Must set *activated* to .true. when called.
      !! \param[in] source Integer rank of the source in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
@@ -91,6 +93,7 @@ module request_callback
 
      !> Handle a request from client side.
      !!
+     !! Must set *activated* to .true. when called.
      !! \param[in] rank Integer of the receiver in comm.
      !! \param[in] tag Specify the message tag.
      !! \param[in] comm MPI communicator.
@@ -115,6 +118,7 @@ contains
     write (u, "(A,1X,I0)") "N_REQUESTS", handler%n_requests
     write (u, "(A,1X,I0)") "TAG_OFFSET", handler%tag_offset
     write (u, "(A,1X,L1)") "FINISHED", handler%finished
+    write (u, "(A,1X,L1)") "ACTIVATED", handler%activated
     write (u, "(A)") "I | SOURCE | TAG | ERROR | REQUEST_NULL"
     do i = 1, handler%n_requests
        write (u, "(A,4(1X,I0),1X,L1)") "REQUEST", i, &
@@ -144,6 +148,8 @@ contains
          call msg_bug ("Error during handler allocate, tag_offset is not a multiple of n_requests.")
     !! What is the max.-allowed MPI_TAG?
     handler%tag_offset = tag_offset
+    handler%activated = .false.
+    handler%finished = .false.
   end subroutine request_handler_allocate
 
   !> Get status from request objects in a non-destructive way.
@@ -151,6 +157,7 @@ contains
     class(request_handler_t), intent(inout) :: handler
     integer :: i
     logical :: flag
+    if (.not. handler%activated) return
     handler%finished = .true.
     do i = 1, handler%n_requests
        call MPI_REQUEST_GET_STATUS (handler%request(i), flag, &
@@ -163,7 +170,7 @@ contains
   subroutine request_handler_waitall (handler)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
-    if (handler%finished) return
+    if (.not. handler%activated .or. handler%finished) return
     call MPI_WAITALL (handler%n_requests, handler%request, handler%status, error)
     if (error /= 0) then
        call msg_bug ("Request: Error occured during waitall on handler.")
@@ -174,7 +181,7 @@ contains
   logical function request_handler_testall (handler) result (flag)
     class(request_handler_t), intent(inout) :: handler
     integer :: error
-    if (.not. handler%finished) then
+    if (.not. handler%activated .or. .not. handler%finished) then
        call MPI_TESTALL (handler%n_requests, handler%request, handler%finished, &
             handler%status, error)
        ! call print_status ()

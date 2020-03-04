@@ -53,6 +53,7 @@ contains
     integer, intent(in) :: source_rank
     type(MPI_COMM), intent(in) :: comm
     call handler%obj%receive (source_rank, handler%tag_offset, comm, handler%request)
+    handler%activated = .true.
     handler%finished = .false.
   end subroutine result_handler_handle
 
@@ -61,6 +62,7 @@ contains
     integer, intent(in) :: dest_rank
     type(MPI_COMM), intent(in) :: comm
     call handler%obj%send (dest_rank, handler%tag_offset, comm, handler%request)
+    handler%activated = .true.
     handler%finished = .false.
   end subroutine result_handler_client_handle
 
