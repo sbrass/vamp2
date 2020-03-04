@@ -600,6 +600,8 @@ contains
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     type(MPI_Request), dimension(:), intent(inout) :: request
+    if (size (request) /= self%get_n_requests ()) &
+         call msg_bug ("VEGAS: number of requests does not match.")
     call MPI_Isend (self%it_start, 1, MPI_INTEGER, receiver, tag + 1,&
          & comm, request(1))
     call MPI_Isend (self%it_num, 1, MPI_INTEGER, receiver , tag + 2,&
@@ -612,22 +614,24 @@ contains
          & comm, request(5))
     call MPI_Isend (self%sum_chi, 1, MPI_DOUBLE_PRECISION, receiver, tag + 6,&
          & comm, request(6))
-    call MPI_Isend (self%efficiency, 1, MPI_DOUBLE_PRECISION, receiver, tag + 7,&
+    call MPI_Isend (self%chi2, 1, MPI_DOUBLE_PRECISION, receiver, tag + 7,&
          & comm, request(7))
-    call MPI_Isend (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 8,&
+    call MPI_Isend (self%efficiency, 1, MPI_DOUBLE_PRECISION, receiver, tag + 8,&
          & comm, request(8))
-    call MPI_Isend (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 9,&
+    call MPI_Isend (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 9,&
          & comm, request(9))
-    call MPI_Isend (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, receiver, tag + 10,&
+    call MPI_Isend (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 10,&
          & comm, request(10))
-    call MPI_Isend (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 11,&
+    call MPI_Isend (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, receiver, tag + 11,&
          & comm, request(11))
-    call MPI_Isend (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 12,&
+    call MPI_Isend (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, receiver, tag + 12,&
          & comm, request(12))
-    call MPI_Isend (self%result, 1, MPI_DOUBLE_PRECISION, receiver, tag + 13,&
+    call MPI_Isend (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, receiver, tag + 13,&
          & comm, request(13))
-    call MPI_Isend (self%std, 1, MPI_DOUBLE_PRECISION, receiver, tag + 14,&
+    call MPI_Isend (self%result, 1, MPI_DOUBLE_PRECISION, receiver, tag + 14,&
          & comm, request(14))
+    call MPI_Isend (self%std, 1, MPI_DOUBLE_PRECISION, receiver, tag + 15,&
+         & comm, request(15))
   end subroutine vegas_result_send
 
   subroutine vegas_result_receive (self, sender, tag, comm, request)
@@ -636,6 +640,8 @@ contains
     integer, intent(in) :: tag
     type(MPI_COMM), intent(in) :: comm
     type(MPI_REQUEST), dimension(:), intent(inout) :: request
+    if (size (request) /= self%get_n_requests ()) &
+         call msg_bug ("VEGAS: number of requests does not match.")
     call MPI_Irecv (self%it_start, 1, MPI_INTEGER, sender, tag + 1,&
          & comm, request(1))
     call MPI_Irecv (self%it_num, 1, MPI_INTEGER, sender , tag + 2,&
@@ -648,27 +654,29 @@ contains
          & comm, request(5))
     call MPI_Irecv (self%sum_chi, 1, MPI_DOUBLE_PRECISION, sender, tag + 6,&
          & comm, request(6))
-    call MPI_Irecv (self%efficiency, 1, MPI_DOUBLE_PRECISION, sender, tag + 7,&
+    call MPI_Irecv (self%chi2, 1, MPI_DOUBLE_PRECISION, sender, tag + 7,&
          & comm, request(7))
-    call MPI_Irecv (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 8,&
+    call MPI_Irecv (self%efficiency, 1, MPI_DOUBLE_PRECISION, sender, tag + 8,&
          & comm, request(8))
-    call MPI_Irecv (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 9,&
+    call MPI_Irecv (self%efficiency_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 9,&
          & comm, request(9))
-    call MPI_Irecv (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, sender, tag + 10,&
+    call MPI_Irecv (self%efficiency_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 10,&
          & comm, request(10))
-    call MPI_Irecv (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 11,&
+    call MPI_Irecv (self%max_abs_f, 1, MPI_DOUBLE_PRECISION, sender, tag + 11,&
          & comm, request(11))
-    call MPI_Irecv (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 12,&
+    call MPI_Irecv (self%max_abs_f_pos, 1, MPI_DOUBLE_PRECISION, sender, tag + 12,&
          & comm, request(12))
-    call MPI_Irecv (self%result, 1, MPI_DOUBLE_PRECISION, sender, tag + 13,&
+    call MPI_Irecv (self%max_abs_f_neg, 1, MPI_DOUBLE_PRECISION, sender, tag + 13,&
          & comm, request(13))
-    call MPI_Irecv (self%std, 1, MPI_DOUBLE_PRECISION, sender, tag + 14,&
+    call MPI_Irecv (self%result, 1, MPI_DOUBLE_PRECISION, sender, tag + 14,&
          & comm, request(14))
+    call MPI_Irecv (self%std, 1, MPI_DOUBLE_PRECISION, sender, tag + 15,&
+         & comm, request(15))
   end subroutine vegas_result_receive
 
   pure integer function vegas_result_get_n_requests (result) result (n_requests)
     class(vegas_result_t), intent(in) :: result
-    n_requests = 14
+    n_requests = 15
   end function vegas_result_get_n_requests
 
   subroutine vegas_handler_init (handler, handler_id, result, d)
