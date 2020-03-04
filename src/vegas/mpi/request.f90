@@ -307,7 +307,6 @@ contains
   !> Wait on all handler in request handler manager to finish communication.
   subroutine request_base_await_handler (req)
     class(request_base_t), intent(inout) :: req
-    call req%handler%write ()
     call req%handler%waitall ()
   end subroutine request_base_await_handler
 

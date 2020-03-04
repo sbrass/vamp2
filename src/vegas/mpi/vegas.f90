@@ -1135,7 +1135,6 @@ contains
        n_size = 1
        rank = 0
     end if
-    write (ERROR_UNIT, "(A,2(1X,I0),1X,L1)") "VEGAS INTEGRATE |", n_size, rank, parallel_mode
     !! END MPI
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")

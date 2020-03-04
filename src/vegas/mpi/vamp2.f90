@@ -797,13 +797,11 @@ contains
           end select
        end if
        !! END MPI
-       write (ERROR_UNIT, '(A)') "CH | T | G | GM | C | COMM"
        channel: do while (channel_iterator%is_iterable ())
           !! No barrier here!!!
           ch = channel_iterator%get_current ()
           !! BEGIN MPI
           call self%request%request_workload (request)
-          write (ERROR_UNIT, *) "[REQUEST]", request
           call update_iter_and_rng (request, channel_iterator, rng)
           if (request%terminate) exit channel
           if (request%group) call MPI_BARRIER (request%comm)
@@ -833,7 +831,6 @@ contains
           !! However, do not interfere with RNG (status of current channel is undefined)
           select type (req => self%request)
           type is (request_caller_t)
-             write (ERROR_UNIT, "(A)") "POST-INTREGATE | TERMINATE"
              call req%terminate ()
           end select
        end if

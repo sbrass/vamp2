@@ -109,7 +109,6 @@ contains
     class(request_state_t), intent(in) :: state
     logical :: flag
     flag = all (state%terminated)
-    write (ERROR_UNIT, "(A,1X,L1)") "STATE TERMINATED: ", flag
   end function request_state_is_terminated
 
   !> Set rank to be terminated (however, do not communicate it).
@@ -173,7 +172,6 @@ contains
     subroutine sanitize_from_terminated_ranks ()
       integer :: i, rank
       !! Remove terminated ranks from done workers.
-      write (ERROR_UNIT, *) "INDICES | ", state%n_workers_done, " | ", state%indices(:state%n_workers_done)
       do i = 1, state%n_workers_done
          rank = state%indices(i)
          if (.not. state%terminated(rank)) cycle
@@ -184,14 +182,12 @@ contains
               state%indices(i:state%n_workers_done - 1) = state%indices(i + 1:state%n_workers_done)
          state%n_workers_done = state%n_workers_done - 1
       end do
-      write (ERROR_UNIT, *) "INDICES | ", state%n_workers_done, " | ", state%indices(:state%n_workers_done)
     end subroutine sanitize_from_terminated_ranks
   end subroutine request_state_receive_request
 
   subroutine request_state_await_request (state)
     class(request_state_t), intent(inout) :: state
     integer :: error
-    write (ERROR_UNIT, *) "AWAIT | TERMINATED | ", state%terminated
     if (state%is_terminated ()) return
     !! Proof: REQUEST(i), i ∈ {1, N_workers}, i is equivalent to rank.
     !! Proof: INDICES(j), STATUS(j), j ∈ {1, N_workers_done}
@@ -251,6 +247,7 @@ contains
     class(request_state_t), intent(inout) :: state
     integer :: rank
     do rank = 1, state%n_workers
+       if (state%request(rank) == MPI_REQUEST_NULL) cycle
        call MPI_REQUEST_FREE (state%request(rank))
     end do
   end subroutine request_state_free_request
@@ -282,10 +279,8 @@ contains
     type(MPI_STATUS), intent(out) :: status
     call MPI_SEND (MPI_EMPTY_HANDLER, 1, MPI_INTEGER, &
          0, MPI_TAG_REQUEST, state%comm)
-    write (ERROR_UNIT, "(A)") "STATE SERVE-SEND | MPI_TAG_REQUEST"
     call MPI_RECV (handler_id, 1, MPI_INTEGER, &
          0, MPI_ANY_TAG, state%comm, status)
-    write (ERROR_UNIT, "(A,1X,I0,1X,I0)") "STATE SERVE-RECEIVE |", status%MPI_SOURCE, status%MPI_TAG
   end subroutine request_state_client_serve
 
   !> Free handler from worker.
