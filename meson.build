@@ -1,10 +1,17 @@
 project('vamp2', ['fortran', 'c'],
   version : '0.1',
-  default_options : ['debug=true', 'optimization=0', 'warning_level=3'],
+  default_options : ['buildtype=debug',
+                     'debug=true',
+                     'optimization=0',
+                     'warning_level=3'],
   license : 'GPLv2')
 
 add_project_arguments('-cpp', language : 'fortran')
 add_project_arguments('-fbacktrace', language : 'fortran')
+if get_option('buildtype') == 'debug'
+  message('add compiler option -fcheck=all')
+  add_project_arguments('-fcheck=all', language : 'fortran')
+endif
 
 fortran_compiler = meson.get_compiler('fortran')
 
