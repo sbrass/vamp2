@@ -1,0 +1,5 @@
+* VAMP2 - Vegas AMPlified 2
+
+  We provide a full modern Fortran 2008 reimplementation for the VAMP algorithm proposed and implemented originally by Thorsten Ohl.
+
+  Additionally, the new implementation provides a fully functional MPI parallelization using features from the MPI-3.1 standard.
