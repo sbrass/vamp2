@@ -102,7 +102,15 @@ if mpi_enabled
   vegas_mpi_ut = executable('vegas_mpi_ut', 'vegas_mpi_ut.f90',
                             link_with : [utils, rng, vegas])
   # test('VEGAS (MPI).', unit_test, args : [vegas_mpi_ut, ref_vegas_mpi])
-  vamp2_mpi_ut = executable('vamp2_mpi_ut', 'vamp2_mpi_ut.f90',
+  vamp2_simple_ut = executable('vamp2_simple_ut', 'vamp2_simple_ut.f90',
+                            link_with : [utils,
+                                         rng,
+                                         vegas,
+                                         load_balancer,
+                                         test_utils,
+                                         signal],
+                            link_language : 'fortran')
+  vamp2_load_ut = executable('vamp2_load_ut', 'vamp2_load_ut.f90',
                             link_with : [utils,
                                          rng,
                                          vegas,
