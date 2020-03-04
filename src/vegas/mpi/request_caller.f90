@@ -38,7 +38,7 @@ contains
     class(request_caller_t), intent(out) :: req
     type(MPI_COMM), intent(in) :: comm
     integer, intent(in) :: n_channels
-    call MPI_COMM_DUP (comm, req%comm)
+    call req%base_init (comm)
     call MPI_COMM_SIZE (req%comm, req%n_workers)
     !! Exclude master rank (0) from set of workers.
     req%n_workers = req%n_workers - 1
@@ -47,7 +47,6 @@ contains
     end if
     req%n_channels = n_channels
     call req%state%init (comm, req%n_workers)
-    call req%cache%init (comm)
     if (req%is_master ()) then
        call allocate_balancer ()
     end if
@@ -174,7 +173,7 @@ contains
     select case (status%MPI_TAG)
     case (MPI_TAG_ASSIGN_SINGLE)
        !! Default to req's communicator.
-       request%comm = req%comm
+       request%comm = req%external_comm
        request%group_master = .true.
        request%callback = .true.
     case (MPI_TAG_ASSIGN_GROUP)

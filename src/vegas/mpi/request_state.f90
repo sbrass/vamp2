@@ -156,18 +156,11 @@ contains
     integer :: i, rank
     integer :: error
     if (state%is_terminated ()) return
-    !! Remove terminated ranks from done workers.
-    do i = 1, state%n_workers_done
-       rank = state%indices(i)
-       if (.not. state%terminated(rank)) cycle
-       state%request(rank) = MPI_REQUEST_NULL
-       state%indices(rank:state%n_workers_done - 1) = state%indices(rank + 1:state%n_workers_done)
-       state%n_workers_done = state%n_workers_done - 1
-    end do
+    call sanitize_from_terminated_ranks ()
     !! Receive new requests from (still active) workers.
     do i = 1, state%n_workers_done
        rank = state%indices(i)
-       write (ERROR_UNIT, "(A,1X,I0,1X,A)") "RANK: ", rank, " | RECEIVE REQUEST"
+       ! write (ERROR_UNIT, "(A,1X,I0,1X,A)") "RANK: ", rank, " | RECEIVE REQUEST"
        call MPI_IRECV (state%handler(rank), 1, MPI_INTEGER, &
             rank, MPI_ANY_TAG, state%comm, state%request(rank), error)
        if (error /= 0) then
@@ -176,11 +169,29 @@ contains
           call msg_bug ()
        end if
     end do
+  contains
+    subroutine sanitize_from_terminated_ranks ()
+      integer :: i, rank
+      !! Remove terminated ranks from done workers.
+      write (ERROR_UNIT, *) "INDICES | ", state%n_workers_done, " | ", state%indices(:state%n_workers_done)
+      do i = 1, state%n_workers_done
+         rank = state%indices(i)
+         if (.not. state%terminated(rank)) cycle
+         state%request(rank) = MPI_REQUEST_NULL
+         !! Proof: i ≤ n_workers_done, n_workers_done ≤ n_workers.
+         if (i < state%n_workers_done) &
+              !! Last element does not require relocation.
+              state%indices(i:state%n_workers_done - 1) = state%indices(i + 1:state%n_workers_done)
+         state%n_workers_done = state%n_workers_done - 1
+      end do
+      write (ERROR_UNIT, *) "INDICES | ", state%n_workers_done, " | ", state%indices(:state%n_workers_done)
+    end subroutine sanitize_from_terminated_ranks
   end subroutine request_state_receive_request
 
   subroutine request_state_await_request (state)
     class(request_state_t), intent(inout) :: state
     integer :: error
+    write (ERROR_UNIT, *) "AWAIT | TERMINATED | ", state%terminated
     if (state%is_terminated ()) return
     !! Proof: REQUEST(i), i ∈ {1, N_workers}, i is equivalent to rank.
     !! Proof: INDICES(j), STATUS(j), j ∈ {1, N_workers_done}
