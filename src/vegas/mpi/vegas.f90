@@ -27,6 +27,7 @@
 ! to the source 'whizard.nw'
 
 module vegas
+  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use kinds, only: default
 
   use diagnostics
@@ -526,7 +527,7 @@ contains
     else
       guarded_variance = variance
     end if
-    wgt = 1 / guarded_variance
+    wgt = 1._default / guarded_variance
     sq_integral = integral**2
     result%result = integral
     result%std = sqrt (guarded_variance)
@@ -1121,12 +1122,18 @@ contains
     self%result%it_start = self%result%it_num
     cumulative_int = 0.
     cumulative_std = 0.
-    n_size = 1
     n_dim_par = floor (self%config%n_dim / 2.)
+    n_size = 1
     !! BEGIN MPI
-    call MPI_Comm_size (self%comm, n_size)
-    call MPI_Comm_rank (self%comm, rank)
     parallel_mode = self%parallel_mode .and. self%is_parallelizable ()
+    if (parallel_mode) then
+       call MPI_Comm_size (self%comm, n_size)
+       call MPI_Comm_rank (self%comm, rank)
+    else
+       n_size = 1
+       rank = 0
+    end if
+    write (ERROR_UNIT, "(A,2(1X,I0),1X,L1)") "VEGAS INTEGRATE |", n_size, rank, parallel_mode
     !! END MPI
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
@@ -1214,7 +1221,7 @@ contains
        associate (result => self%result)
          ! Compute final results for this iterations
          call result%update (total_integral, variance = &
-               total_sq_integral / (self%config%calls_per_box - 1.))
+               total_sq_integral / (self%config%calls_per_box - 1._default))
          call result%update_efficiency (n_calls = self%config%n_calls, &
               max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
               sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
