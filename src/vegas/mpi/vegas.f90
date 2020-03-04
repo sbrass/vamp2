@@ -571,7 +571,7 @@ contains
        result%efficiency_neg = &
             & sum_neg / max_neg
     end if
-    result%efficiency = 0.
+    result%efficiency = 0
     if (result%max_abs_f > 0.) then
        result%efficiency = (sum_pos + sum_neg) &
             & / result%max_abs_f

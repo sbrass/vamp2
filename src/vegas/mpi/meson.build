@@ -10,4 +10,6 @@ load_balancer = library('request', ['balancer.f90',
 
 vegas = library('vegas', ['vegas.f90',
                           'vamp2.f90'],
-                link_with : [utils, rng, load_balancer])
+                link_with : [utils,
+                             rng,
+                             load_balancer])

@@ -16,8 +16,7 @@ module vamp2
   use request_base
   use request_simple
   use request_caller
-  use request_balancer
-  use channel_balancer
+  use balancer_base
   use request_callback
   use mpi_f08 !NODEP!
 
