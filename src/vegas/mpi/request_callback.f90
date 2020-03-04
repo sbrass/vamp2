@@ -205,6 +205,7 @@ contains
     class(request_handler_t), intent(inout) :: handler
     integer :: i, error
     do i = 1, handler%n_requests
+       if (handler%request(i) == MPI_REQUEST_NULL) cycle
        call MPI_REQUEST_FREE (handler%request(i), error)
        if (error /= 0) then
           call msg_bug ("Request: Error occured during free request on handler.")
