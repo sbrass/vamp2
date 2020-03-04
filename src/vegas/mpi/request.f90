@@ -144,7 +144,7 @@ contains
   end subroutine request_group_cache_init
 
   subroutine request_group_cache_reset (cache)
-    class(request_group_cache_t), intent(out) :: cache
+    class(request_group_cache_t), intent(inout) :: cache
     cache%group = MPI_GROUP_EMPTY
     cache%comm = MPI_COMM_NULL
   end subroutine request_group_cache_reset
