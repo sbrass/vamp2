@@ -47,15 +47,15 @@ program main
      call balancer%write (ERROR_UNIT)
 
      !! Free all workers.
-     call balancer%free_worker(worker_id = 5)
+     call balancer%free_worker(worker_id = 5, resource_id = 3)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 5
-     call balancer%free_worker(worker_id = 2)
+     call balancer%free_worker(worker_id = 2, resource_id = 2)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 2
-     call balancer%free_worker(worker_id = 1)
+     call balancer%free_worker(worker_id = 1, resource_id = 4)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 1
-     call balancer%free_worker(worker_id = 3)
+     call balancer%free_worker(worker_id = 3, resource_id = 1)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 3
-     call balancer%free_worker(worker_id = 4)
+     call balancer%free_worker(worker_id = 4, resource_id = 3)
      write (ERROR_UNIT, "(A,1X,I0)") "FREE", 4
   end do
 

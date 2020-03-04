@@ -255,20 +255,41 @@ contains
     end subroutine fill_resource_group
   end subroutine channel_balancer_assign_worker
 
-  subroutine channel_balancer_free_worker (balancer, worker_id)
+  !> Free worker from associated resource.
+  !!
+  !! Idempotent. Depending on state association, given resource must equal worker's resource (check) for single state.
+  !! For all state, the *current* resource of the worker may differ (grouping behavior!), only in case, that the older resource is inactive, return as idempotent.
+  !! Else, free all worker from resource group.
+  subroutine channel_balancer_free_worker (balancer, worker_id, resource_id)
     class(channel_balancer_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
-    integer :: i, i_state, resource_id
+    integer, intent(in) :: resource_id
+    integer :: i, i_state
     if (.not. balancer%worker(worker_id)%is_assigned ()) return
     associate (state => balancer%state)
       i_state = balancer%worker(worker_id)%get_state ()
-      resource_id = balancer%worker(worker_id)%get_resource ()
-      call balancer%resource(resource_id)%set_inactive ()
-      call state(i_state)%free_resource (resource_id)
       select case (state(i_state)%mode)
       case (STATE_SINGLE)
+         if (.not. resource_id == balancer%worker(worker_id)%get_resource ()) then
+            call msg_bug ("Channel balancer: resource and associated resource do not match.")
+         end if
+         call balancer%resource(resource_id)%set_inactive ()
+         call state(i_state)%free_resource (resource_id)
          call balancer%worker(worker_id)%free ()
       case (STATE_ALL)
+         if (resource_id /= balancer%worker(worker_id)%get_resource ()) then
+            if (balancer%resource(resource_id)%is_active ()) then
+               msg_buffer = "Channel balancer: resource is still active,&
+                    & but worker is assigned to another resource."
+               call msg_bug ()
+            else
+               !! Special case: Worker was already freed from (now inactive) resource_id (by another call to free_worker),
+               !! and in the mean time assigned to a new resource. So, nothing to do.
+               return
+            end if
+         end if
+         call balancer%resource(resource_id)%set_inactive ()
+         call state(i_state)%free_resource (resource_id)
          do i = 1, balancer%n_workers
             if (.not. balancer%worker(i)%get_state () == i_state) cycle
             call balancer%worker(i)%free ()

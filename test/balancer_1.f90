@@ -68,7 +68,7 @@ program main
         call check_is_pending ()
         call check_resource_group ()
         call check_resource_master ()
-        call balancer%free_worker(worker_id = worker)
+        call balancer%free_worker(worker_id = worker, resource_id = handler)
      end if
   end do
 

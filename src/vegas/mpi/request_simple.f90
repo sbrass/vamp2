@@ -147,7 +147,7 @@ contains
     integer :: rank, worker_id
     call MPI_COMM_RANK (req%comm, rank)
     worker_id = shift_rank_to_worker (rank)
-    call req%balancer%free_worker (worker_id)
+    call req%balancer%free_worker (worker_id, request%handler_id)
   end subroutine request_simple_release_workload
 
   subroutine request_simple_handle_and_release_workload (req, request)

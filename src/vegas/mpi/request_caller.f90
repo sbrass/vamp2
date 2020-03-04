@@ -126,13 +126,11 @@ contains
              write (ERROR_UNIT, "(A,3(1X,I0))") "[REQUEST]", source, tag, handler
           case (MPI_TAG_HANDLER_AND_RELEASE)
              write (ERROR_UNIT, "(A,2(1X,I0))") "MPI_TAG_HANDLER_AND_RELEASE", handler, source
-             !! \note call_handler expects an worker_id ∈ {1, …, N} and shifts it to a rank index!
-             !! We have to revert the effect beforehand.
              call req%call_handler (handler, source_rank = source)
-             call req%balancer%free_worker (worker_id)
+             call req%balancer%free_worker (worker_id, handler)
           case (MPI_TAG_RELEASE)
              write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_RELEASE", source
-             call req%balancer%free_worker (worker_id)
+             call req%balancer%free_worker (worker_id, handler)
           case (MPI_TAG_TERMINATE)
              write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_TERMINATE", source
              call req%state%terminate (source)

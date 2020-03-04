@@ -171,14 +171,16 @@ contains
     end associate
   end subroutine balancer_simple_assign_worker
 
-  subroutine balancer_simple_free_worker (balancer, worker_id)
+  subroutine balancer_simple_free_worker (balancer, worker_id, resource_id)
     class(balancer_simple_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
-    integer :: resource_id
+    integer, intent(in) :: resource_id
     integer :: i
     if (.not. balancer%worker(worker_id)%is_assigned ()) return
+    if (.not. resource_id == balancer%worker(worker_id)%get_resource ()) then
+       call msg_bug ("Balancer simple: resource and associated resource do not match.")
+    end if
     associate (state => balancer%state(BALANCER_SIMPLE_CHANNEL))
-      resource_id = balancer%worker(worker_id)%get_resource ()
       call balancer%resource(resource_id)%set_inactive ()
       call state%free_resource (resource_id)
       if (balancer%parallel_grid(resource_id)) then

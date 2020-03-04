@@ -143,10 +143,17 @@ module balancer_base
      !!
      !! If worker is not assigned, this procedure is idempotent.
      !! If worker is assigned, alter state correspondingly.
-     subroutine balancer_base_free_worker (balancer, worker_id)
+     !! \note In order to correctly free a worker from a resource, we have to explicitly keep track of the association status of a worker and a resource.
+     !! This feature is mostly relevant for resources with a worker group.
+     ! The resource may be disassociated from their worker by earlier calls or the former worker may be already assigned to a new resource.
+     !! In the latter case, we are not allowed to free them (as the new resource is still active).
+     !! Therefore, each call must check if a worker and resource are still associated and the resource is still active.
+     !! Only, in this case, disassociating workers and resource is allowed.
+     subroutine balancer_base_free_worker (balancer, worker_id, resource_id)
        import :: balancer_base_t
        class(balancer_base_t), intent(inout) :: balancer
        integer, intent(in) :: worker_id
+       integer, intent(in) :: resource_id
      end subroutine balancer_base_free_worker
   end interface
 
