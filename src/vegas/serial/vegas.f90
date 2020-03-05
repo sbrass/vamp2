@@ -114,6 +114,9 @@ module vegas
      real(default) :: evt_weight_excess = 0.
    contains
      procedure, public :: write => vegas_result_write
+     procedure, public :: update => vegas_result_update
+     procedure, public :: update_efficiency => vegas_result_update_efficiency
+     procedure, public :: reset => vegas_result_reset
   end type vegas_result_t
 
   type :: vegas_t
@@ -139,6 +142,8 @@ module vegas
      procedure, public :: get_variance => vegas_get_variance
      procedure, public :: get_efficiency => vegas_get_efficiency
      procedure, public :: get_max_abs_f => vegas_get_max_abs_f
+     procedure, public :: get_sum_abs_f_pos => vegas_get_sum_abs_f_pos
+     procedure, public :: get_sum_abs_f_neg => vegas_get_sum_abs_f_neg
      procedure, public :: get_max_abs_f_pos => vegas_get_max_abs_f_pos
      procedure, public :: get_max_abs_f_neg => vegas_get_max_abs_f_neg
      procedure, public :: get_evt_weight => vegas_get_evt_weight
@@ -457,6 +462,88 @@ contains
          & "Event weight excess             = ", self%evt_weight_excess
   end subroutine vegas_result_write
 
+  subroutine vegas_result_update (result, integral, variance)
+    class(vegas_result_t), intent(inout) :: result
+    real(default), intent(in) :: integral
+    real(default), intent(in) :: variance
+    real(default) :: guarded_variance, sq_integral
+    real(default) :: wgt, chi
+    !! Guard against zero variance.
+    !! Δ = I * ε → I = Δ.
+    if (variance < epsilon (1._default) &
+         * max (integral**2, 1._default)) then
+       guarded_variance = epsilon (1._default) &
+            * max (integral**2, 1._default)
+    else
+      guarded_variance = variance
+    end if
+    wgt = 1._default / guarded_variance
+    sq_integral = integral**2
+    result%result = integral
+    result%std = sqrt (guarded_variance)
+    result%samples = result%samples + 1
+    if (result%samples == 1) then
+       result%chi2 = 0._default
+    else
+       chi = integral
+       if (result%sum_wgts > 0) then
+          chi = chi - result%sum_int_wgtd / result%sum_wgts
+       end if
+       result%chi2 = result%chi2 * (result%samples - 2.0_default)
+       result%chi2 = (wgt / (1._default + (wgt / result%sum_wgts))) &
+            & * chi**2
+       result%chi2 = result%chi2 / (result%samples - 1._default)
+    end if
+    result%sum_wgts = result%sum_wgts + wgt
+    result%sum_int_wgtd = result%sum_int_wgtd + (integral * wgt)
+    result%sum_chi = result%sum_chi + (sq_integral * wgt)
+  end subroutine vegas_result_update
+
+  subroutine vegas_result_update_efficiency (result, &
+       n_calls, max_pos, max_neg, sum_pos, sum_neg)
+    class(vegas_result_t), intent(inout) :: result
+    integer, intent(in) :: n_calls
+    real(default), intent(in) :: max_pos
+    real(default), intent(in) :: max_neg
+    real(default), intent(in) :: sum_pos
+    real(default), intent(in) :: sum_neg
+    result%max_abs_f_pos = n_calls * max_pos
+    result%max_abs_f_neg = n_calls * max_neg
+    result%max_abs_f = &
+         & max (result%max_abs_f_pos, result%max_abs_f_neg)
+    result%efficiency_pos = 0
+    if (max_pos > 0) then
+       result%efficiency_pos = &
+            & sum_pos / max_pos
+    end if
+    result%efficiency_neg = 0
+    if (max_neg > 0) then
+       result%efficiency_neg = &
+            & sum_neg / max_neg
+    end if
+    result%efficiency = 0
+    if (result%max_abs_f > 0.) then
+       result%efficiency = (sum_pos + sum_neg) &
+            & / result%max_abs_f
+    end if
+  end subroutine vegas_result_update_efficiency
+
+  subroutine vegas_result_reset (result)
+    class(vegas_result_t), intent(inout) :: result
+    result%sum_int_wgtd = 0
+    result%sum_wgts = 0
+    result%sum_chi = 0
+    result%it_num = 0
+    result%samples = 0
+    result%chi2 = 0
+    result%efficiency = 0
+    result%efficiency_pos = 0
+    result%efficiency_neg = 0
+    result%max_abs_f = 0
+    result%max_abs_f_pos = 0
+    result%max_abs_f_neg = 0
+  end subroutine vegas_result_reset
+
   type(vegas_t) function vegas_init (n_dim, alpha, n_bins_max, iterations, mode) result (self)
     integer, intent(in) :: n_dim
     integer, intent(in), optional :: n_bins_max
@@ -489,6 +576,7 @@ contains
     deallocate (self%box)
     deallocate (self%bin)
   end subroutine vegas_final
+
   subroutine vegas_set_limits (self, x_lower, x_upper)
     class(vegas_t), intent(inout) :: self
     real(default), dimension(:), intent(in) :: x_lower
@@ -560,6 +648,12 @@ contains
     result = self%result
   end function vegas_get_result
 
+  subroutine vegas_set_result (self, result)
+    class(vegas_t), intent(inout) :: self
+    type(vegas_result_t), intent(in) :: result
+    self%result = result
+  end subroutine vegas_set_result
+
   elemental real(default) function vegas_get_n_calls (self) result (n_calls)
     class(vegas_t), intent(in) :: self
     n_calls = self%config%n_calls
@@ -596,6 +690,16 @@ contains
        max_abs_f = self%result%max_abs_f
     end if
   end function vegas_get_max_abs_f
+
+  elemental real(default) function vegas_get_sum_abs_f_pos (self) result (sum_abs_f)
+    class(vegas_t), intent(in) :: self
+    sum_abs_f = self%result%efficiency_pos * self%result%max_abs_f_pos
+  end function vegas_get_sum_abs_f_pos
+
+  elemental real(default) function vegas_get_sum_abs_f_neg (self) result (sum_abs_f)
+    class(vegas_t), intent(in) :: self
+    sum_abs_f = self%result%efficiency_neg * self%result%max_abs_f_neg
+  end function vegas_get_sum_abs_f_neg
 
   elemental real(default) function vegas_get_max_abs_f_pos (self) result (max_abs_f)
     class(vegas_t), intent(in) :: self
@@ -675,18 +779,7 @@ contains
 
   subroutine vegas_reset_result (self)
     class(vegas_t), intent(inout) :: self
-    self%result%sum_int_wgtd = 0.
-    self%result%sum_wgts = 0.
-    self%result%sum_chi = 0.
-    self%result%it_num = 0
-    self%result%samples = 0
-    self%result%chi2 = 0
-    self%result%efficiency = 0.
-    self%result%efficiency_pos = 0.
-    self%result%efficiency_neg = 0.
-    self%result%max_abs_f = 0.
-    self%result%max_abs_f_pos = 0.
-    self%result%max_abs_f_neg = 0.
+    call self%result%reset ()
   end subroutine vegas_reset_result
 
   subroutine vegas_reset_grid (self)
@@ -751,7 +844,7 @@ contains
     real(default), dimension(self%config%n_dim) :: x
     real(default) :: fval, fval_sq, bin_volume
     real(default) :: fval_box, fval_sq_box
-    real(default) :: total_integral, total_sq_integral, total_variance, chi, wgt
+    real(default) :: total_integral, total_sq_integral
     real(default) :: cumulative_int, cumulative_std
     real(default) :: sum_abs_f_pos, max_abs_f_pos
     real(default) :: sum_abs_f_neg, max_abs_f_neg
@@ -764,12 +857,12 @@ contains
     ! MPI-specific variables below
     call set_options ()
     call self%init_grid ()
-    if (opt_reset_result) call self%reset_result ()
+    if (opt_reset_result) call self%result%reset ()
     self%result%it_start = self%result%it_num
     cumulative_int = 0.
     cumulative_std = 0.
-    n_size = 1
     n_dim_par = floor (self%config%n_dim / 2.)
+    n_size = 1
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
@@ -780,7 +873,6 @@ contains
        self%bin = 1
        total_integral = 0.
        total_sq_integral = 0.
-       total_variance = 0.
        sum_abs_f_pos = 0.
        max_abs_f_pos = 0.
        sum_abs_f_neg = 0.
@@ -815,7 +907,7 @@ contains
              fval_sq_box = sqrt (fval_sq_box * self%config%calls_per_box)
              ! (a - b) * (a + b) = a**2 - b**2
              fval_sq_box = (fval_sq_box - fval_box) * (fval_sq_box + fval_box)
-             if (fval_sq_box <= 0.0) fval_sq_box = tiny (1.0_default)
+             if (fval_sq_box <= 0.0) fval_sq_box = fval_box**2 * epsilon (1.0_default)
              total_integral = total_integral + fval_box
              total_sq_integral = total_sq_integral + fval_sq_box
              if (self%config%mode == VEGAS_MODE_STRATIFIED) then
@@ -833,37 +925,14 @@ contains
      
        associate (result => self%result)
          ! Compute final results for this iterations
-         total_variance = total_sq_integral / (self%config%calls_per_box - 1.)
-         ! Ensure variance is always positive and larger than zero.
-         if (total_variance < tiny (1._default) / epsilon (1._default) &
-              & * max (total_integral**2, 1._default)) then
-            total_variance = tiny (1._default) / epsilon (1._default) &
-                 & * max (total_integral**2, 1._default)
-         end if
-         wgt = 1. / total_variance
-         total_sq_integral = total_integral**2
-         result%result = total_integral
-         result%std = sqrt (total_variance)
-         result%samples = result%samples + 1
-         if (result%samples == 1) then
-            result%chi2 = 0._default
-         else
-            chi = total_integral
-            if (result%sum_wgts > 0) then
-               chi = chi - result%sum_int_wgtd / result%sum_wgts
-            end if
-            result%chi2 = result%chi2 * (result%samples - 2.0_default)
-            result%chi2 = (wgt / (1._default + (wgt / result%sum_wgts))) &
-                 & * chi**2
-            result%chi2 = result%chi2 / (result%samples - 1._default)
-         end if
-         result%sum_wgts = result%sum_wgts + wgt
-         result%sum_int_wgtd = result%sum_int_wgtd + (total_integral * wgt)
-         result%sum_chi = result%sum_chi + (total_sq_integral * wgt)
+         call result%update (total_integral, variance = &
+               total_sq_integral / (self%config%calls_per_box - 1._default))
+         call result%update_efficiency (n_calls = self%config%n_calls, &
+              max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+              sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
-         cumulative_std = sqrt (1. / result%sum_wgts)
+         cumulative_std = sqrt (1 / result%sum_wgts)
        end associate
-       call calculate_efficiency ()
        if (opt_verbose) then
           write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                & it, self%config%n_calls, cumulative_int, cumulative_std, &
@@ -884,28 +953,6 @@ contains
       opt_verbose = .false.
       if (present (verbose)) opt_verbose = verbose
     end subroutine set_options
-
-    subroutine calculate_efficiency ()
-      self%result%max_abs_f_pos = self%config%n_calls * max_abs_f_pos
-      self%result%max_abs_f_neg = self%config%n_calls * max_abs_f_neg
-      self%result%max_abs_f = &
-           & max (self%result%max_abs_f_pos, self%result%max_abs_f_neg)
-      self%result%efficiency_pos = 0.
-      if (max_abs_f_pos > 0.) then
-         self%result%efficiency_pos = &
-              & sum_abs_f_pos / max_abs_f_pos
-      end if
-      self%result%efficiency_neg = 0.
-      if (max_abs_f_neg > 0.) then
-         self%result%efficiency_neg = &
-              & sum_abs_f_neg / max_abs_f_neg
-      end if
-      self%result%efficiency = 0.
-      if (self%result%max_abs_f > 0.) then
-         self%result%efficiency = (sum_abs_f_pos + sum_abs_f_neg) &
-              & / self%result%max_abs_f
-      end if
-    end subroutine calculate_efficiency
 
     subroutine increment_box_coord (box, success)
       integer, dimension(:), intent(inout) :: box

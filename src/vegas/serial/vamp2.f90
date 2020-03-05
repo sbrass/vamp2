@@ -1,31 +1,3 @@
-! WHIZARD 2.8.3 Oct 24 2019
-!
-! Copyright (C) 1999-2019 by
-!     Wolfgang Kilian <kilian@physik.uni-siegen.de>
-!     Thorsten Ohl <ohl@physik.uni-wuerzburg.de>
-!     Juergen Reuter <juergen.reuter@desy.de>
-!
-!     with contributions from
-!     cf. main AUTHORS file
-!
-! WHIZARD is free software; you can redistribute it and/or modify it
-! under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2, or (at your option)
-! any later version.
-!
-! WHIZARD is distributed in the hope that it will be useful, but
-! WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program; if not, write to the Free Software
-! Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This file has been stripped of most comments.  For documentation, refer
-! to the source 'whizard.nw'
-
 module vamp2
 
   use kinds, only: default
@@ -51,18 +23,18 @@ module vamp2
   public :: vamp2_equivalences_t
   public :: vamp2_t
 
-integer, parameter, public :: &
-     VEQ_IDENTITY = 0, VEQ_INVERT = 1, VEQ_SYMMETRIC = 2, VEQ_INVARIANT = 3
+  integer, parameter, public :: &
+       VEQ_IDENTITY = 0, VEQ_INVERT = 1, VEQ_SYMMETRIC = 2, VEQ_INVARIANT = 3
   character(len=*), parameter, private :: &
-     descr_fmt =         "(1X,A)", &
-     integer_fmt =       "(1X,A18,1X,I15)", &
-     integer_array_fmt = "(1X,I18,1X,I15)", &
-     logical_fmt =       "(1X,A18,1X,L1)", &
-     double_fmt =        "(1X,A18,1X,E24.16E4)", &
-     double_array_fmt =  "(1X,I18,1X,E24.16E4)", &
-     double_array_pac_fmt = "(1X,I18,1X,E16.8E4)", &
-     double_array2_fmt = "(1X,2(1X,I8),1X,E24.16E4)", &
-     double_array2_pac_fmt = "(1X,2(1X,I8),1X,E16.8E4)"
+       descr_fmt =         "(1X,A)", &
+       integer_fmt =       "(1X,A18,1X,I15)", &
+       integer_array_fmt = "(1X,I18,1X,I15)", &
+       logical_fmt =       "(1X,A18,1X,L1)", &
+       double_fmt =        "(1X,A18,1X,E24.16E4)", &
+       double_array_fmt =  "(1X,I18,1X,E24.16E4)", &
+       double_array_pac_fmt = "(1X,I18,1X,E16.8E4)", &
+       double_array2_fmt = "(1X,2(1X,I8),1X,E24.16E4)", &
+       double_array2_pac_fmt = "(1X,2(1X,I8),1X,E16.8E4)"
 
   type, abstract, extends(vegas_func_t) :: vamp2_func_t
      integer :: current_channel = 0
@@ -117,17 +89,17 @@ integer, parameter, public :: &
   end type vamp2_equi_t
 
   type :: vamp2_equivalences_t
-      private
-      integer :: n_eqv = 0
-      integer :: n_channel = 0
-      integer :: n_dim = 0
-      type(vamp2_equi_t), dimension(:), allocatable :: eqv
-      integer, dimension(:), allocatable :: map
-      integer, dimension(:), allocatable :: multiplicity
-      integer, dimension(:), allocatable :: symmetry
-      logical, dimension(:), allocatable :: independent
-      integer, dimension(:), allocatable :: equivalent_to_ch
-      logical, dimension(:, :), allocatable :: dim_is_invariant
+     private
+     integer :: n_eqv = 0
+     integer :: n_channel = 0
+     integer :: n_dim = 0
+     type(vamp2_equi_t), dimension(:), allocatable :: eqv
+     integer, dimension(:), allocatable :: map
+     integer, dimension(:), allocatable :: multiplicity
+     integer, dimension(:), allocatable :: symmetry
+     logical, dimension(:), allocatable :: independent
+     integer, dimension(:), allocatable :: equivalent_to_ch
+     logical, dimension(:, :), allocatable :: dim_is_invariant
    contains
      procedure :: write => vamp2_equivalences_write
      procedure, public :: is_allocated => vamp2_equivalences_is_allocated
@@ -171,22 +143,23 @@ integer, parameter, public :: &
      procedure, private :: apply_equivalences => vamp2_apply_equivalences
      procedure, public :: reset_result => vamp2_reset_result
      procedure, public :: integrate => vamp2_integrate
+     procedure, private :: prepare_integrate_iteration => vamp2_prepare_integrate_iteration
+     procedure, private :: compute_result_and_efficiency => vamp2_compute_result_and_efficiency
      procedure, public :: generate_weighted => vamp2_generate_weighted_event
      procedure, public :: generate_unweighted => vamp2_generate_unweighted_event
      procedure, public :: write_grids => vamp2_write_grids
      procedure, public :: read_grids => vamp2_read_grids
-   procedure :: write_binary_grids => vamp2_write_binary_grids
-   procedure :: read_binary_grids => vamp2_read_binary_grids
+     procedure :: write_binary_grids => vamp2_write_binary_grids
+     procedure :: read_binary_grids => vamp2_read_binary_grids
   end type vamp2_t
 
-
- abstract interface
-    subroutine vamp2_func_evaluate_maps (self, x)
-      import :: vamp2_func_t, default
-      class(vamp2_func_t), intent(inout) :: self
-      real(default), dimension(:), intent(in) :: x
-    end subroutine vamp2_func_evaluate_maps
- end interface
+  abstract interface
+     subroutine vamp2_func_evaluate_maps (self, x)
+       import :: vamp2_func_t, default
+       class(vamp2_func_t), intent(inout) :: self
+       real(default), dimension(:), intent(in) :: x
+     end subroutine vamp2_func_evaluate_maps
+  end interface
 
   abstract interface
      real(default) function vamp2_func_evaluate_func (self, x) result (f)
@@ -203,7 +176,6 @@ integer, parameter, public :: &
   interface vamp2_t
      module procedure vamp2_init
   end interface vamp2_t
-
 
 contains
 
@@ -400,11 +372,11 @@ contains
   end function vamp2_equivalences_is_allocated
 
   subroutine vamp2_equivalences_get_channels (eqv, i_eqv, dest, src)
-   class(vamp2_equivalences_t), intent(in) :: eqv
-   integer, intent(in) :: i_eqv
-   integer, intent(out) :: dest, src
-   dest = eqv%eqv(i_eqv)%ch
-   src = eqv%eqv(i_eqv)%ch_src
+    class(vamp2_equivalences_t), intent(in) :: eqv
+    integer, intent(in) :: i_eqv
+    integer, intent(out) :: dest, src
+    dest = eqv%eqv(i_eqv)%ch
+    src = eqv%eqv(i_eqv)%ch_src
   end subroutine vamp2_equivalences_get_channels
 
   function vamp2_equivalences_get_mode (eqv, i_eqv) result (mode)
@@ -429,7 +401,7 @@ contains
     integer, dimension(:), intent(in) :: perm, mode
     integer :: i
     if (dest < 1 .or. dest > eqv%n_channel)  call msg_bug &
-       ("VAMP2: set_equivalences: destination channel out of range.")
+         ("VAMP2: set_equivalences: destination channel out of range.")
     if (src < 1 .or. src > eqv%n_channel)  call msg_bug &
          ("VAMP2: set_equivalences: source channel out of range.")
     if (size(perm) /= eqv%n_dim)  call msg_bug &
@@ -503,22 +475,26 @@ contains
     integer :: ch
     self%config%n_dim = n_dim
     self%config%n_channel = n_channel
-    if (present (n_bins_max)) self%config%n_bins_max = n_bins_max
-    if (present (n_calls_min_per_channel)) self%config%n_calls_min_per_channel = n_calls_min_per_channel
-    if (present (alpha)) self%config%alpha = alpha
-    if (present (beta)) self%config%beta = beta
-    if (present (iterations)) self%config%iterations = iterations
-    if (present (mode)) self%config%mode = mode
+    call set_options ()
     allocate (self%chain(n_channel), source=0)
     allocate (self%integrator(n_channel))
     allocate (self%weight(n_channel), source=0._default)
     do ch = 1, n_channel
        self%integrator(ch) = vegas_t (n_dim, alpha, n_bins_max, 1, mode)
     end do
-    self%weight = 1. / self%config%n_channel
+    self%weight = 1._default / self%config%n_channel
     call self%reset_result ()
     allocate (self%event_weight(self%config%n_channel), source = 0._default)
     self%event_prepared = .false.
+  contains
+    subroutine set_options ()
+      if (present (n_bins_max)) self%config%n_bins_max = n_bins_max
+      if (present (n_calls_min_per_channel)) self%config%n_calls_min_per_channel = n_calls_min_per_channel
+      if (present (alpha)) self%config%alpha = alpha
+      if (present (beta)) self%config%beta = beta
+      if (present (iterations)) self%config%iterations = iterations
+      if (present (mode)) self%config%mode = mode
+    end subroutine set_options
   end function vamp2_init
 
   subroutine vamp2_final (self)
@@ -743,13 +719,7 @@ contains
 
   subroutine vamp2_reset_result (self)
     class(vamp2_t), intent(inout) :: self
-    self%result%sum_int_wgtd = 0.
-    self%result%sum_wgts = 0.
-    self%result%sum_chi = 0.
-    self%result%it_num = 0
-    self%result%samples = 0
-    self%result%chi2 = 0
-    self%result%efficiency = 0.
+    call self%result%reset ()
   end subroutine vamp2_reset_result
 
   subroutine vamp2_integrate (self, func, rng, iterations, reset_result,&
@@ -764,7 +734,6 @@ contains
     logical, intent(in), optional :: verbose
     real(default), optional, intent(out) :: result, abserr
     integer :: it, ch
-    real(default) :: total_integral, total_sq_integral, total_variance, chi, wgt
     type(iterator_t) :: channel_iterator
     real(default) :: cumulative_int, cumulative_std
     logical :: opt_reset_result
@@ -772,21 +741,13 @@ contains
     logical :: opt_refine_grids
     logical :: opt_verbose
     call set_options ()
-    cumulative_int = 0.
-    cumulative_std = 0.
-    if (opt_reset_result) call self%reset_result ()
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
+    if (opt_reset_result) call self%reset_result ()
     iteration: do it = 1, self%config%iterations
        call channel_iterator%init (1, self%config%n_channel)
-       total_integral = 0._default
-       total_sq_integral = 0._default
-       total_variance = 0._default
-       do ch = 1, self%config%n_channel
-          func%wi(ch) = self%weight(ch)
-          func%grids(ch) = self%integrator(ch)%get_grid ()
-       end do
+       call self%prepare_integrate_iteration (func)
        channel: do while (channel_iterator%is_iterable ())
           ch = channel_iterator%get_current ()
           call func%set_channel (ch)
@@ -794,42 +755,14 @@ contains
                & func, rng, iterations, refine_grid = .false., verbose = .false.)
           call channel_iterator%next_step ()
        end do channel
-       total_integral = dot_product (self%weight, self%integrator%get_integral ())
-       total_sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
-       total_variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
+       call self%compute_result_and_efficiency ()
        associate (result => self%result)
-         ! a**2 - b**2 = (a - b) * (a + b)
-         total_variance = sqrt (total_variance + total_sq_integral)
-         total_variance = 1. / self%config%n_calls * &
-              & (total_variance + total_integral) * (total_variance - total_integral)
-         ! Ensure variance is always positive and larger than zero
-         if (total_variance < tiny (1._default) / epsilon (1._default) * max (total_integral**2, 1._default)) then
-            total_variance = tiny (1._default) / epsilon (1._default) * max (total_integral**2, 1._default)
-         end if
-         wgt = 1. / total_variance
-         result%result = total_integral
-         result%std = sqrt (total_variance)
-         result%samples = result%samples + 1
-         if (result%samples == 1) then
-            result%chi2 = 0._default
-         else
-            chi = total_integral
-            if (result%sum_wgts > 0) chi = chi - result%sum_int_wgtd / result%sum_wgts
-            result%chi2 = result%chi2 * (result%samples - 2.0_default)
-            result%chi2 = (wgt / (1._default + (wgt / result%sum_wgts))) &
-                 & * chi**2
-            result%chi2 = result%chi2 / (result%samples - 1._default)
-         end if
-         result%sum_wgts = result%sum_wgts + wgt
-         result%sum_int_wgtd = result%sum_int_wgtd + (total_integral * wgt)
-         result%sum_chi = result%sum_chi + (total_sq_integral * wgt)
          cumulative_int = result%sum_int_wgtd / result%sum_wgts
-         cumulative_std = sqrt (1. / result%sum_wgts)
-         call calculate_efficiency ()
+         cumulative_std = sqrt (1 / result%sum_wgts)
          if (opt_verbose) then
             write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
                  & it, self%config%n_calls, cumulative_int, cumulative_std, &
-                 & self%result%chi2, self%result%efficiency
+                 & result%chi2, result%efficiency
             call msg_message ()
          end if
        end associate
@@ -860,23 +793,61 @@ contains
       if (present (verbose)) opt_verbose = verbose
     end subroutine set_options
 
-    subroutine calculate_efficiency ()
-      self%result%max_abs_f = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f ())
-      self%result%max_abs_f_pos = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f_pos ())
-      self%result%max_abs_f_neg = dot_product (self%weight, &
-           & self%integrator%get_max_abs_f_neg ())
-      self%result%efficiency = 0.
-      if (self%result%max_abs_f > 0.) then
-         self%result%efficiency = &
-              & dot_product (self%weight * self%integrator%get_max_abs_f (), &
-              & self%integrator%get_efficiency ()) / self%result%max_abs_f
-         ! TODO pos. or. negative efficiency would be very nice.
-      end if
-    end subroutine calculate_efficiency
-
   end subroutine vamp2_integrate
+
+  !> Prepare iteration, i.e. provide weights and grids to function object.
+  subroutine vamp2_prepare_integrate_iteration (self, func)
+    class(vamp2_t), intent(inout) :: self
+    class(vamp2_func_t), intent(inout) :: func
+    call fill_func_with_weights_and_grids (func)
+  contains
+    subroutine fill_func_with_weights_and_grids (func)
+      class(vamp2_func_t), intent(inout) :: func
+      integer :: ch
+      do ch = 1, self%config%n_channel
+         func%wi(ch) = self%weight(ch)
+         !! \todo Use pointers instead of a deep copy.
+         func%grids(ch) = self%integrator(ch)%get_grid ()
+      end do
+    end subroutine fill_func_with_weights_and_grids
+
+  end subroutine vamp2_prepare_integrate_iteration
+
+  !> Compute the result and efficiency of the current status of the integrator.
+  subroutine vamp2_compute_result_and_efficiency (self)
+    class(vamp2_t), intent(inout) :: self
+    real(default) :: total_integral, total_variance
+    real(default) :: max_abs_f_pos, max_abs_f_neg, &
+         sum_abs_f_pos, sum_abs_f_neg
+    call compute_integral_and_variance (total_integral, total_variance)
+    call self%result%update (total_integral, total_variance)
+    call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+         sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
+    call self%result%update_efficiency (n_calls  = 1, &
+         max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
+         sum_pos = sum_abs_f_neg, sum_neg = sum_abs_f_neg)
+  contains
+    subroutine compute_integral_and_variance (integral, variance)
+      real(default), intent(out) :: integral, variance
+      real(default) :: sq_integral
+      integral = dot_product (self%weight, self%integrator%get_integral ())
+      sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
+      variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
+      variance = sqrt (variance + sq_integral)
+      variance = 1 / self%config%n_calls * &
+           & (total_variance + total_integral) * (total_variance - total_integral)
+    end subroutine compute_integral_and_variance
+
+    subroutine compute_efficiency (max_pos, max_neg, &
+         sum_pos, sum_neg)
+      real(default), intent(out) :: max_pos, max_neg
+      real(default), intent(out) :: sum_pos, sum_neg
+      max_abs_f_pos = maxval (self%integrator%get_max_abs_f_pos ())
+      max_abs_f_neg = maxval (self%integrator%get_max_abs_f_neg ())
+      sum_abs_f_pos = dot_product (self%weight, self%integrator%get_sum_abs_f_pos ())
+      sum_abs_f_neg = dot_product (self%weight, self%integrator%get_sum_abs_f_neg ())
+    end subroutine compute_efficiency
+  end subroutine vamp2_compute_result_and_efficiency
 
   subroutine vamp2_generate_weighted_event (&
        self, func, rng, x)
