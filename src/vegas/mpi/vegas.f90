@@ -175,9 +175,9 @@ module vegas
      procedure, public :: get_max_abs_f_neg => vegas_get_max_abs_f_neg
      procedure, public :: get_evt_weight => vegas_get_evt_weight
      procedure, public :: get_evt_weight_excess => vegas_get_evt_weight_excess
-     procedure, public :: allocate_handler => vegas_allocate_handler
      procedure, public :: get_distribution => vegas_get_distribution
      procedure, public :: set_distribution => vegas_set_distribution
+     procedure, public :: allocate_handler => vegas_allocate_handler
      procedure, private :: init_grid => vegas_init_grid
      procedure, public :: reset_result => vegas_reset_result
      procedure, public :: reset_grid => vegas_reset_grid
@@ -767,8 +767,9 @@ contains
     call self%reset_grid ()
     call self%reset_result ()
     !! BEGIN MPI
-    self%comm = MPI_COMM_NULL
-    self%parallel_mode = .true.
+    call self%prepare_parallel_integrate (MPI_COMM_WORLD, &
+         duplicate_comm = .false., &
+         parallel_mode = .true.)
     !! END MPI
   end function vegas_init
 
@@ -983,17 +984,6 @@ contains
     evt_weight_excess = self%result%evt_weight_excess
   end function vegas_get_evt_weight_excess
 
-  subroutine vegas_allocate_handler (self, handler_id, handler)
-    class(vegas_t), intent(in), target :: self
-    integer, intent(in) :: handler_id
-    class(request_handler_t), pointer, intent(out) :: handler
-    allocate (vegas_handler_t :: handler)
-    select type (handler)
-    type is (vegas_handler_t)
-       call handler%init (handler_id, result = self%result, d = self%d)
-    end select
-  end subroutine vegas_allocate_handler
-
   function vegas_get_distribution (self) result (d)
     class(vegas_t), intent(in) :: self
     real(default), dimension(:, :), allocatable :: d
@@ -1011,6 +1001,17 @@ contains
     end if
     self%d = d
   end subroutine vegas_set_distribution
+
+  subroutine vegas_allocate_handler (self, handler_id, handler)
+    class(vegas_t), intent(in), target :: self
+    integer, intent(in) :: handler_id
+    class(request_handler_t), pointer, intent(out) :: handler
+    allocate (vegas_handler_t :: handler)
+    select type (handler)
+    type is (vegas_handler_t)
+       call handler%init (handler_id, result = self%result, d = self%d)
+    end select
+  end subroutine vegas_allocate_handler
 
   subroutine vegas_init_grid (self)
     class(vegas_t), intent(inout) :: self
