@@ -920,9 +920,9 @@ contains
              call increment_box_coord (self%box(1:n_dim_par), box_success)
              if (.not. box_success) exit shift
           end do shift
-          
+
        end do loop_over_par_boxes
-     
+
        associate (result => self%result)
          ! Compute final results for this iterations
          call result%update (total_integral, variance = &
