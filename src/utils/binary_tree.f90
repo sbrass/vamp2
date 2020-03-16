@@ -1,5 +1,5 @@
 module binary_tree
-  use iso_fortran_env, only: ERROR_UNIT
+  use io_units
 
   implicit none
 
@@ -153,7 +153,7 @@ contains
     class(binary_tree_t), intent(in) :: btree
     integer, intent(in), optional :: unit
     integer :: u
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit(unit=unit)
     write (u, "(A,1X,I3)") "Number of elements", btree%n_elements
     if (associated (btree%root)) then
        call btree%root%write (u, level = 0, mode = "*")
@@ -214,7 +214,8 @@ contains
           parent%left => node
        end if
     else
-       write (ERROR_UNIT, "(A,1X,I0)") "Error: MUST not insert duplicate key", node%key
+       !! \todo{Better error handling?}
+       write (*, "(A,1X,I0)") "Error: MUST not insert duplicate key", node%key
        stop 1
     end if
     call parent%increment_height ()
