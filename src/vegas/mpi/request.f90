@@ -3,8 +3,7 @@
 !! Only in special case (e.g. outside of object communication is required) the parent communicator should be directly used.
 !! For example, that is the case for the group cache, as it exports its newly created communicator to the outside of the request library.
 module request_base
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
-
+  use io_units
   use diagnostics
 
   use balancer_base
@@ -211,7 +210,7 @@ contains
     class(request_base_t), intent(in) :: req
     integer, intent(in), optional :: unit
     integer :: u
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     if (allocated (req%balancer)) then
        call req%balancer%write (u)
     else
@@ -230,7 +229,7 @@ contains
     integer :: rank, ierr
     call MPI_COMM_RANK (req%comm, rank, ierr)
     if (ierr /= 0) then
-       write (ERROR_UNIT, "(A,1X,I0)") "MPI Error: request_base_is_master", ierr
+       write (*, "(A,1X,I0)") "MPI Error: request_base_is_master", ierr
        stop 1
     end if
     flag = (rank == 0)
