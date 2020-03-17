@@ -1032,7 +1032,7 @@ contains
       sq_integral = dot_product (self%weight, self%integrator%get_integral ()**2)
       variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
       variance = sqrt (variance + sq_integral)
-      variance = 1 / self%config%n_calls * &
+      variance = 1._default / self%config%n_calls * &
            & (total_variance + total_integral) * (total_variance - total_integral)
     end subroutine compute_integral_and_variance
 
