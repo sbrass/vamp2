@@ -823,7 +823,7 @@ contains
     call self%result%update (total_integral, total_variance)
     call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
-    call self%result%update_efficiency (n_calls  = 1, &
+    call self%result%update_efficiency (n_calls  = self%config%n_calls, &
          max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
   contains

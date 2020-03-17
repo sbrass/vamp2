@@ -110,6 +110,14 @@ if mpi_enabled
                                          test_utils,
                                          signal],
                             link_language : 'fortran')
+  vamp2_simple_ut_2 = executable('vamp2_simple_ut_2', 'vamp2_simple_ut_2.f90',
+                               link_with : [utils,
+                                            rng,
+                                            vegas,
+                                            load_balancer,
+                                            test_utils,
+                                            signal],
+                               link_language : 'fortran')
   vamp2_load_ut = executable('vamp2_load_ut', 'vamp2_load_ut.f90',
                             link_with : [utils,
                                          rng,
@@ -118,6 +126,15 @@ if mpi_enabled
                                          test_utils,
                                          signal],
                             link_language : 'fortran')
+  vamp2_load_ut_2 = executable('vamp2_load_ut_2', 'vamp2_load_ut_2.f90',
+                             link_with : [utils,
+                                          rng,
+                                          vegas,
+                                          load_balancer,
+                                          test_utils,
+                                          signal],
+                             link_language : 'fortran')
+
   # test('VAMP2 (MPI).', unit_test, args : [vamp2_mpi_ut, ref_vamp2_mpi])
 else
   vegas_ut = executable('vegas_ut', ['vegas_ut.f90',

@@ -141,7 +141,10 @@ module vamp2
      procedure, public :: set_limits => vamp2_set_limits
      procedure, public :: set_chain => vamp2_set_chain
      procedure, public :: set_equivalences => vamp2_set_equivalences
-     procedure :: allocate_request => vamp2_allocate_request
+     generic, public :: allocate_request => allocate_request_by_method, &
+          allocate_request_by_object
+     procedure, private :: allocate_request_by_method => vamp2_allocate_request_by_method
+     procedure, private :: allocate_request_by_object => vamp2_allocate_request_by_object
      procedure, public :: get_n_calls => vamp2_get_n_calls
      procedure, public :: get_integral => vamp2_get_integral
      procedure, public :: get_variance => vamp2_get_variance
@@ -599,13 +602,36 @@ contains
     self%equivalences = equivalences
   end subroutine vamp2_set_equivalences
 
+  !> Allocate request object by matching a method name.
+  !!
+  !! Defaults to us the MPI_COMM_WORLD and self%config%n_channels.
+  subroutine vamp2_allocate_request_by_method (self, method)
+    class(vamp2_t), intent(inout) :: self
+    character(len=*), intent(in) :: method
+    class(request_base_t), allocatable :: request
+    select case (trim(method))
+    case("simple", "Simple", "SIMPLE")
+       allocate (request_simple_t :: request)
+    case("load", "Load", "LOAD")
+       allocate (request_caller_t :: request)
+    case default
+       call msg_bug ("VAMP2: Unknown method for MPI request module.")
+    end select
+    select type (request)
+    type is (request_simple_t)
+       call request%init (MPI_COMM_WORLD, n_channels = self%config%n_channel)
+    type is (request_caller_t)
+       call request%init (MPI_COMM_WORLD, n_channels = self%config%n_channel)
+    end select
+    call self%allocate_request_by_object (request)
+  end subroutine vamp2_allocate_request_by_method
+
   !> Move allocated (and prepared!) request object into VAMP2.
   !!
   !! Then, provide type-dependent setup.
-  subroutine vamp2_allocate_request (self, request)
+  subroutine vamp2_allocate_request_by_object (self, request)
     class(vamp2_t), intent(inout) :: self
     class(request_base_t), allocatable, intent(inout) :: request
-    class(request_handler_t), pointer :: vegas_result_handler
     integer :: ch
     call move_alloc (request, self%request)
     select type (req => self%request)
@@ -616,7 +642,7 @@ contains
     class default
        call msg_bug ("VAMP2: Unknown extension of request_base.")
     end select
-  end subroutine vamp2_allocate_request
+  end subroutine vamp2_allocate_request_by_object
 
   elemental real(default) function vamp2_get_n_calls (self) result (n_calls)
     class(vamp2_t), intent(in) :: self
@@ -1021,7 +1047,7 @@ contains
     call self%result%update (total_integral, total_variance)
     call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
-    call self%result%update_efficiency (n_calls  = 1, &
+    call self%result%update_efficiency (n_calls  = self%config%n_calls, &
          max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
   contains
