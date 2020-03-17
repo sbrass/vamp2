@@ -67,7 +67,6 @@ contains
     integer, intent(in), optional :: unit
     integer :: u
     u = given_output_unit (unit)
-    u = ERROR_UNIT; if (present (unit)) u = unit
     write (u, "(A)") "[REQUEST_CALLER]"
     call req%base_write (u)
     call req%state%write (u)
