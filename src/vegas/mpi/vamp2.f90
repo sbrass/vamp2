@@ -1023,7 +1023,7 @@ contains
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
     call self%result%update_efficiency (n_calls  = 1, &
          max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
-         sum_pos = sum_abs_f_neg, sum_neg = sum_abs_f_neg)
+         sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
   contains
     subroutine compute_integral_and_variance (integral, variance)
       real(default), intent(out) :: integral, variance
