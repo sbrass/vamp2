@@ -18,7 +18,7 @@ VEGAS_FILES=(
     request_caller.f90
     request_state.f90
     resources.f90
-    channel_balancer.f90
+    balancer_channel.f90
 )
 
 function copy_files () {

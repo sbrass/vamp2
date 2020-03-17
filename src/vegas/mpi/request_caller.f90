@@ -1,11 +1,11 @@
 module request_caller
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use kinds, only: default
+  use io_units
   use diagnostics
 
   use request_base
   use balancer_base
-  use channel_balancer
+  use balancer_channel
   use request_state
   use request_callback
 
@@ -53,9 +53,9 @@ contains
   contains
     subroutine allocate_balancer ()
       class(balancer_base_t), allocatable :: balancer
-      allocate (channel_balancer_t :: balancer)
+      allocate (balancer_channel_t :: balancer)
       select type (balancer)
-      type is (channel_balancer_t)
+      type is (balancer_channel_t)
          call balancer%init (n_workers = req%n_workers, n_resources = req%n_channels)
       end select
       call req%add_balancer (balancer)
@@ -66,6 +66,7 @@ contains
     class(request_caller_t), intent(in) :: req
     integer, intent(in), optional :: unit
     integer :: u
+    u = given_output_unit (unit)
     u = ERROR_UNIT; if (present (unit)) u = unit
     write (u, "(A)") "[REQUEST_CALLER]"
     call req%base_write (u)
@@ -81,7 +82,7 @@ contains
     call req%state%reset ()
     call req%reset ()
     select type (balancer => req%balancer)
-    type is (channel_balancer_t)
+    type is (balancer_channel_t)
        call balancer%update_state(weight, parallel_grid)
     end select
   end subroutine request_caller_update_balancer
@@ -104,11 +105,8 @@ contains
           !! Formally differentiate between worker_id and source.
           worker_id = source
           if (.not. allocated (req%balancer)) tag = MPI_TAG_TERMINATE
-          ! write (ERROR_UNIT, "(A,1X,I0)") "TAG |", tag
           select case (tag)
           case (MPI_TAG_REQUEST)
-             ! write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_REQUEST", source
-             ! write (ERROR_UNIT, "(A,1X,L1)") "--------->", req%balancer%is_assignable (source)
              if (req%balancer%is_assignable (worker_id)) then
                 call req%balancer%assign_worker (worker_id, handler)
                 if (.not. req%balancer%has_resource_group (handler)) then
@@ -118,26 +116,19 @@ contains
                    call provide_request_group (handler, source)
                 end if
              else
-                ! write (ERROR_UNIT, "(A)") "---------> TERMINATE"
                 call req%state%terminate (source)
              end if
-             ! write (ERROR_UNIT, "(A,3(1X,I0))") "[REQUEST]", source, tag, handler
           case (MPI_TAG_HANDLER_AND_RELEASE)
-             ! write (ERROR_UNIT, "(A,2(1X,I0))") "MPI_TAG_HANDLER_AND_RELEASE", handler, source
              call req%call_handler (handler, source_rank = source)
              call req%balancer%free_worker (worker_id, handler)
           case (MPI_TAG_RELEASE)
-             ! write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_RELEASE", source
              call req%balancer%free_worker (worker_id, handler)
           case (MPI_TAG_TERMINATE)
-             ! write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_TERMINATE", source
              call req%state%terminate (source)
           case (MPI_TAG_CLIENT_TERMINATE)
              !! Allow workers to request their own termination.
-             ! write (ERROR_UNIT, "(A,1X,I0)") "MPI_TAG_CLIENT_TERMINATE", source
              call req%state%set_terminated (source)
           case default
-             ! write (msg_buffer, "(I6,1X,A,1X,I6,1X,A,1X,I0)") source, "INVALID TAG -> ", tag, "MSG", handler
              call msg_warning ()
           end select
        end do
@@ -206,7 +197,6 @@ contains
     if (.not. req%handler%has_handler (request%handler_id)) then
        call msg_bug ("Request: Handler is not registered for this worker.")
     end if
-    ! write (ERROR_UNIT, "(A,1X,I0)") "HANDLE AND RELEASE", request%handler_id
     call req%release_workload (request)
     call req%call_client_handler (request%handler_id)
   end subroutine request_caller_handle_and_release_workload

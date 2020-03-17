@@ -4,7 +4,7 @@ program main
        r64 => REAL64
 
   use request_balancer
-  use channel_balancer
+  use balancer_channel
 
   use test_utils
 
@@ -32,10 +32,10 @@ program main
 
   call generator%init (1234)
 
-  allocate (channel_balancer_t :: balancer)
+  allocate (balancer_channel_t :: balancer)
   call balancer%init (n_workers, n_channels)
   select type (balancer)
-  type is (channel_balancer_t)
+  type is (balancer_channel_t)
      call balancer%add_parallel_grid (parallel_grid)
      call balancer%compute_resource_weight (channel_weight)
      call balancer%write (ERROR_UNIT)

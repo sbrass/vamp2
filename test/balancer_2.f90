@@ -1,4 +1,4 @@
-!> Test channel_balancer_t implementation.
+!> Test balancer_channel_t implementation.
 program main
   use iso_fortran_env, only: ERROR_UNIT, &
        r64 => REAL64
@@ -6,7 +6,7 @@ program main
   use kinds, only: default
 
   use balancer_base
-  use channel_balancer
+  use balancer_channel
 
   implicit none
 
@@ -23,9 +23,9 @@ program main
   weight = weight / sum (weight)
   parallel_grid(3) = .true.
 
-  allocate (channel_balancer_t :: balancer)
+  allocate (balancer_channel_t :: balancer)
   select type (balancer)
-  type is (channel_balancer_t)
+  type is (balancer_channel_t)
      call balancer%init (n_workers = n_workers, n_resources = n_resources)
      call balancer%update_state (weight, parallel_grid)
   end select

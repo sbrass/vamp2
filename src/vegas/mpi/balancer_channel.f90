@@ -1,10 +1,9 @@
-module channel_balancer
+module balancer_channel
   use kinds, only: default
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
+  use io_units
+  use diagnostics
 
   use balancer_base
-
-  use diagnostics
 
   implicit none
 
@@ -12,11 +11,11 @@ module channel_balancer
 
   real(default), parameter :: BETA = 1.5_default
 
-  integer, parameter :: N_CHANNEL_BALANCER_STATE = 2, &
+  integer, parameter :: N_BALANCER_CHANNEL_STATE = 2, &
        CHANNEL_STATE = 1, &
        GRID_STATE = 2
 
-  type, extends(balancer_base_t) :: channel_balancer_t
+  type, extends(balancer_base_t) :: balancer_channel_t
      private
      integer :: n_parallel_grids = 0
      integer :: n_parallel_channels = 0
@@ -24,31 +23,31 @@ module channel_balancer
      integer :: n_channel_workers = 0
      logical, dimension(:), allocatable :: parallel_grid
    contains
-     procedure :: init => channel_balancer_init
-     procedure :: write => channel_balancer_write
-     procedure :: update_state => channel_balancer_update_state
-     procedure :: has_resource_group => channel_balancer_has_resource_group
-     procedure :: get_resource_group => channel_balancer_get_resource_group
-     procedure :: get_resource_master => channel_balancer_get_resource_master
-     procedure :: assign_worker => channel_balancer_assign_worker
-     procedure :: free_worker => channel_balancer_free_worker
-  end type channel_balancer_t
+     procedure :: init => balancer_channel_init
+     procedure :: write => balancer_channel_write
+     procedure :: update_state => balancer_channel_update_state
+     procedure :: has_resource_group => balancer_channel_has_resource_group
+     procedure :: get_resource_group => balancer_channel_get_resource_group
+     procedure :: get_resource_master => balancer_channel_get_resource_master
+     procedure :: assign_worker => balancer_channel_assign_worker
+     procedure :: free_worker => balancer_channel_free_worker
+  end type balancer_channel_t
 
-  public :: channel_balancer_t
+  public :: balancer_channel_t
 contains
-  subroutine channel_balancer_init (balancer, n_workers, n_resources)
-    class(channel_balancer_t), intent(out), target :: balancer
+  subroutine balancer_channel_init (balancer, n_workers, n_resources)
+    class(balancer_channel_t), intent(out), target :: balancer
     integer, intent(in) :: n_workers
     integer, intent(in) :: n_resources
     call balancer%base_init (n_workers, n_resources)
     allocate (balancer%parallel_grid(n_resources), source = .false.)
-  end subroutine channel_balancer_init
+  end subroutine balancer_channel_init
 
-  subroutine channel_balancer_write (balancer, unit)
-    class(channel_balancer_t), intent(in) :: balancer
+  subroutine balancer_channel_write (balancer, unit)
+    class(balancer_channel_t), intent(in) :: balancer
     integer, intent(in), optional :: unit
     integer :: u, n_size
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(A)") "Channel Balancer."
     write (u, "(A,1X,I3)") "Parallel grids: ", balancer%n_parallel_grids
     write (u, "(A,1X,I3)") "Parallel channels: ", balancer%n_parallel_channels
@@ -57,10 +56,10 @@ contains
     n_size = min (25, size (balancer%parallel_grid))
     write (u, "(A,25(1X,L1))") "Parallel Grids:", balancer%parallel_grid(:n_size)
     call balancer%base_write (u)
-  end subroutine channel_balancer_write
+  end subroutine balancer_channel_write
 
-  subroutine channel_balancer_update_state (balancer, weight, parallel_grid)
-    class(channel_balancer_t), intent(inout) :: balancer
+  subroutine balancer_channel_update_state (balancer, weight, parallel_grid)
+    class(balancer_channel_t), intent(inout) :: balancer
     real(default), dimension(:), intent(in) :: weight
     logical, dimension(:), intent(in) :: parallel_grid
     real(default) :: min_parallel_weight
@@ -142,7 +141,7 @@ contains
     subroutine allocate_state ()
       type(resource_state_t), dimension(:), allocatable :: state
       integer :: ch
-      allocate (state(N_CHANNEL_BALANCER_STATE))
+      allocate (state(N_BALANCER_CHANNEL_STATE))
       call state(CHANNEL_STATE)%init ( &
            mode = STATE_SINGLE, &
            n_workers = balancer%n_channel_workers)
@@ -160,11 +159,11 @@ contains
       call state(GRID_STATE)%freeze ()
       call balancer%add_state (state)
     end subroutine allocate_state
-  end subroutine channel_balancer_update_state
+  end subroutine balancer_channel_update_state
 
-  pure function channel_balancer_has_resource_group (balancer, resource_id) &
+  pure function balancer_channel_has_resource_group (balancer, resource_id) &
        result (flag)
-    class(channel_balancer_t), intent(in) :: balancer
+    class(balancer_channel_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
     logical :: flag
     if (.not. balancer%resource(resource_id)%is_active ()) then
@@ -172,21 +171,21 @@ contains
        return
     end if
     flag = balancer%parallel_grid(resource_id)
-  end function channel_balancer_has_resource_group
+  end function balancer_channel_has_resource_group
 
-  pure subroutine channel_balancer_get_resource_group (balancer, resource_id, group)
-    class(channel_balancer_t), intent(in) :: balancer
+  pure subroutine balancer_channel_get_resource_group (balancer, resource_id, group)
+    class(balancer_channel_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
     integer, dimension(:), allocatable, intent(out) :: group
     integer :: i
     if (.not. balancer%has_resource_group (resource_id)) return
     group = pack ([(i, i = 1, balancer%n_workers)], &
          mask = balancer%worker%get_resource () == resource_id)
-  end subroutine channel_balancer_get_resource_group
+  end subroutine balancer_channel_get_resource_group
 
-  pure integer function channel_balancer_get_resource_master (balancer, resource_id) &
+  pure integer function balancer_channel_get_resource_master (balancer, resource_id) &
        result (worker_id)
-    class(channel_balancer_t), intent(in) :: balancer
+    class(balancer_channel_t), intent(in) :: balancer
     integer, intent(in) :: resource_id
     integer :: i
     if (.not. balancer%resource(resource_id)%is_active ()) then
@@ -203,10 +202,10 @@ contains
          end if
       end do
     end associate
-  end function channel_balancer_get_resource_master
+  end function balancer_channel_get_resource_master
 
-  subroutine channel_balancer_assign_worker (balancer, worker_id, resource_id)
-    class(channel_balancer_t), intent(inout) :: balancer
+  subroutine balancer_channel_assign_worker (balancer, worker_id, resource_id)
+    class(balancer_channel_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
     integer, intent(out) :: resource_id
     integer :: i_state
@@ -253,15 +252,15 @@ contains
       end if
       call balancer%resource(resource_id)%set_active (n_workers = n_workers)
     end subroutine fill_resource_group
-  end subroutine channel_balancer_assign_worker
+  end subroutine balancer_channel_assign_worker
 
   !> Free worker from associated resource.
   !!
   !! Idempotent. Depending on state association, given resource must equal worker's resource (check) for single state.
   !! For all state, the *current* resource of the worker may differ (grouping behavior!), only in case, that the older resource is inactive, return as idempotent.
   !! Else, free all worker from resource group.
-  subroutine channel_balancer_free_worker (balancer, worker_id, resource_id)
-    class(channel_balancer_t), intent(inout) :: balancer
+  subroutine balancer_channel_free_worker (balancer, worker_id, resource_id)
+    class(balancer_channel_t), intent(inout) :: balancer
     integer, intent(in) :: worker_id
     integer, intent(in) :: resource_id
     integer :: i, i_state
@@ -296,5 +295,5 @@ contains
          end do
       end select
     end associate
-  end subroutine channel_balancer_free_worker
-end module channel_balancer
+  end subroutine balancer_channel_free_worker
+end module balancer_channel

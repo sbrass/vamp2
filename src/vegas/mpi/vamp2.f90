@@ -771,17 +771,18 @@ contains
     logical :: opt_verbose
     !! BEGIN MPI
     type(request_t) :: request
-    if (.not. allocated (self%request)) then
-       call msg_bug ("VAMP2: Request object not allocated.")
-    end if
     !! END MPI
     call set_options ()
     if (opt_verbose) then
        call msg_message ("Results: [it, calls, integral, error, chi^2, eff.]")
     end if
     if (opt_reset_result) call self%reset_result ()
+    !! BEGIN MPI
+    if (.not. allocated (self%request)) then
+       call msg_bug ("VAMP2: Request object not allocated.")
+    end if
+    !! END MPI
     iteration: do it = 1, self%config%iterations
-       call self%request%barrier ()
        call channel_iterator%init (1, self%config%n_channel)
        call self%prepare_integrate_iteration (func)
        !! BEGIN MPI
@@ -836,30 +837,29 @@ contains
        call reduce_func_calls (func)
        call self%request%await_handler ()
        call self%request%barrier ()
-       if (self%request%is_master ()) then
-          !! END MPI
-          call self%compute_result_and_efficiency ()
-          associate (result => self%result)
-            cumulative_int = result%sum_int_wgtd / result%sum_wgts
-            cumulative_std = sqrt (1 / result%sum_wgts)
-            if (opt_verbose) then
-               write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
-                    & it, self%config%n_calls, cumulative_int, cumulative_std, &
-                    & result%chi2, result%efficiency
-               call msg_message ()
-            end if
-          end associate
-          if (opt_adapt_weights) then
-             call self%adapt_weights ()
+       if (.not. self%request%is_master ()) cycle
+       !! END MPI
+       call self%compute_result_and_efficiency ()
+       associate (result => self%result)
+         cumulative_int = result%sum_int_wgtd / result%sum_wgts
+         cumulative_std = sqrt (1 / result%sum_wgts)
+         if (opt_verbose) then
+            write (msg_buffer, "(I0,1x,I0,1x, 4(E24.16E4,1x))") &
+                 & it, self%config%n_calls, cumulative_int, cumulative_std, &
+                 & result%chi2, result%efficiency
+            call msg_message ()
+         end if
+       end associate
+       if (opt_adapt_weights) then
+          call self%adapt_weights ()
+       end if
+       if (opt_refine_grids) then
+          if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
+             call self%apply_equivalences ()
           end if
-          if (opt_refine_grids) then
-             if (self%config%equivalences .and. self%equivalences%is_allocated ()) then
-                call self%apply_equivalences ()
-             end if
-             do ch = 1, self%config%n_channel
-                call self%integrator(ch)%refine ()
-             end do
-          end if
+          do ch = 1, self%config%n_channel
+             call self%integrator(ch)%refine ()
+          end do
        end if
     end do iteration
     if (present (result)) result = cumulative_int

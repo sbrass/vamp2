@@ -1,9 +1,8 @@
 module balancer_simple
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
+  use io_units
+  use diagnostics
 
   use balancer_base
-
-  use diagnostics
 
   implicit none
 
@@ -55,7 +54,7 @@ contains
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in), optional :: unit
     integer :: u, n_size
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     call balancer%base_write (u)
     n_size = min (25, size (balancer%parallel_grid))
     write (u, "(A,25(1X,L1))") "Parallel Grids:", balancer%parallel_grid(:n_size)

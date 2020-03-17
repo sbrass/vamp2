@@ -1,9 +1,7 @@
 module balancer_base
-  use kinds, only: default
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
-  use array_list
-
+  use io_units
   use diagnostics
+  use array_list
 
   implicit none
 
@@ -178,7 +176,7 @@ contains
     class(worker_t), intent(in) :: worker
     integer, intent(in), optional :: unit
     integer :: u
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(3(A,1X,I3,1X),A,1X,L1)") "RESOURCE", worker%resource, &
          "STATE", worker%state, &
          "N_RESOURCES", worker%n_resources, &
@@ -218,7 +216,7 @@ contains
     class(resource_t), intent(in) :: resource
     integer, intent(in), optional :: unit
     integer :: u
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(A,1X,I3,1X,A,1X,L1,1X,A,1X,I3)") &
          "RESOURCE_ID", resource%resource_id, &
          "ACTIVE", resource%active, &
@@ -246,7 +244,7 @@ contains
     class(resource_state_t), intent(in) :: state
     integer, intent(in), optional :: unit
     integer :: u
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(A,1X,I0)") "N_STATE_WORKERS", state%n_workers
     select case (state%mode)
     case (STATE_SINGLE)
@@ -320,7 +318,7 @@ contains
     class(balancer_base_t), intent(in) :: balancer
     integer, intent(in), optional :: unit
     integer :: u, i
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(A)") "[REQUEST BALANCER]"
     write (u, "(3(A,1X,I3,1X))") "N_WORKERS", balancer%n_workers, &
          "N_RESOURCES", balancer%n_resources, &

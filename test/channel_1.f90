@@ -4,7 +4,7 @@ program main
        r64 => REAL64
 
   use balancer_base
-  use channel_balancer
+  use balancer_channel
 
   use test_utils
 
@@ -27,9 +27,9 @@ program main
   parallel_grid = channel_weight > 1
   channel_weight = channel_weight / sum (channel_weight)
 
-  allocate (channel_balancer_t :: balancer)
+  allocate (balancer_channel_t :: balancer)
   select type (balancer)
-  type is (channel_balancer_t)
+  type is (balancer_channel_t)
      call balancer%init (n_workers, n_channels)
      call balancer%update_state (channel_weight, parallel_grid)
   end select

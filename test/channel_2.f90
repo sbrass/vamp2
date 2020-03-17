@@ -4,7 +4,7 @@ program main
        r64 => REAL64
 
   use balancer_base
-  use channel_balancer
+  use balancer_channel
 
   implicit none
 
@@ -31,9 +31,9 @@ program main
   write (ERROR_UNIT, "(A)") "* =================================================="
   write (ERROR_UNIT, "(A)") "* Setup"
   write (ERROR_UNIT, "(A)") "* =================================================="
-  allocate (channel_balancer_t :: balancer)
+  allocate (balancer_channel_t :: balancer)
   select type (balancer)
-  type is (channel_balancer_t)
+  type is (balancer_channel_t)
      call balancer%init (n_workers, n_channels)
      call balancer%update_state (channel_weight, parallel_grid)
   end select

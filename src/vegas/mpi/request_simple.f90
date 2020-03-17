@@ -1,6 +1,5 @@
 module request_simple
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
-
+  use io_units
   use diagnostics
 
   use array_list
@@ -9,7 +8,7 @@ module request_simple
   use balancer_simple
   use request_base
 
-  use mpi_f08
+  use mpi_f08 !NODEP!
 
   implicit none
 
@@ -82,7 +81,7 @@ contains
     class(request_simple_t), intent(in) :: req
     integer, intent(in), optional :: unit
     integer :: u, n_size
-    u = ERROR_UNIT; if (present (unit)) u = unit
+    u = given_output_unit (unit)
     write (u, "(A)") "[REQUEST_SIMPLE]"
     write (u, "(A,1X,I0)") "N_CHANNELS", req%n_channels
     write (u, "(A,1X,I0)") "N_WORKERS", req%n_workers
