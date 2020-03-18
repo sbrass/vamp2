@@ -823,7 +823,8 @@ contains
     call self%result%update (total_integral, total_variance)
     call compute_efficiency (max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
-    call self%result%update_efficiency (n_calls  = self%config%n_calls, &
+    !! Do not average of number of calls, we have already averaged the efficiencies of all channels.
+    call self%result%update_efficiency (n_calls  = 1, &
          max_pos = max_abs_f_pos, max_neg = max_abs_f_neg, &
          sum_pos = sum_abs_f_pos, sum_neg = sum_abs_f_neg)
   contains
@@ -838,14 +839,25 @@ contains
            & (total_variance + total_integral) * (total_variance - total_integral)
     end subroutine compute_integral_and_variance
 
+    !> We compute the weight-averaged sum and maximum of the channel (integration) weights \f$w_{i,c}\f$.
+    !!
+    !! The averaged integration weight and maximum are
+    !! \f[
+    !!  \langle w \rangle = \sum_i \alpha_i \frac{\sum_j w_{i, j}}{N_i},
+    !! \f]
+    !! \f[
+    !!  \langle \max w \rangle = \sum_i \alpha_i |\max_j w_{i, j}|.
+    !! \f]
     subroutine compute_efficiency (max_pos, max_neg, &
          sum_pos, sum_neg)
       real(default), intent(out) :: max_pos, max_neg
       real(default), intent(out) :: sum_pos, sum_neg
-      max_abs_f_pos = maxval (self%integrator%get_max_abs_f_pos ())
-      max_abs_f_neg = maxval (self%integrator%get_max_abs_f_neg ())
-      sum_abs_f_pos = dot_product (self%weight, self%integrator%get_sum_abs_f_pos ())
-      sum_abs_f_neg = dot_product (self%weight, self%integrator%get_sum_abs_f_neg ())
+      max_abs_f_pos = dot_product (self%weight, self%integrator%get_max_abs_f_pos ())
+      max_abs_f_neg = dot_product (self%weight, self%integrator%get_max_abs_f_neg ())
+      sum_abs_f_pos = dot_product (self%weight, &
+           self%integrator%get_sum_abs_f_pos () / self%integrator%get_calls ())
+      sum_abs_f_neg = dot_product (self%weight, &
+           self%integrator%get_sum_abs_f_neg () / self%integrator%get_calls ())
     end subroutine compute_efficiency
   end subroutine vamp2_compute_result_and_efficiency
 
