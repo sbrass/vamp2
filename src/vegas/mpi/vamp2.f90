@@ -632,16 +632,18 @@ contains
   subroutine vamp2_allocate_request_by_object (self, request)
     class(vamp2_t), intent(inout) :: self
     class(request_base_t), allocatable, intent(inout) :: request
-    integer :: ch
+    !! Only output in case of "parallel" integration.
+    if (request%has_workers ()) then
+       select type (request)
+       type is (request_simple_t)
+          call msg_message ("VAMP2: Simple Request Balancing.")
+       type is (request_caller_t)
+          call msg_message ("VAMP2: Request with load balancing.")
+       class default
+          call msg_bug ("VAMP2: Unknown extension of request_base.")
+       end select
+    end if
     call move_alloc (request, self%request)
-    select type (req => self%request)
-    type is (request_simple_t)
-       call msg_message ("VAMP2: Simple Request Balancing.")
-    type is (request_caller_t)
-       call msg_message ("VAMP2: Request with load balancing.")
-    class default
-       call msg_bug ("VAMP2: Unknown extension of request_base.")
-    end select
   end subroutine vamp2_allocate_request_by_object
 
   elemental real(default) function vamp2_get_n_calls (self) result (n_calls)

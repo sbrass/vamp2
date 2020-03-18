@@ -23,6 +23,7 @@ module request_caller
    contains
      procedure :: init => request_caller_init
      procedure :: write => request_caller_write
+     procedure :: has_workers => request_caller_has_workers
      procedure :: update_balancer => request_caller_update_balancer
      procedure :: handle_workload => request_caller_handle_workload
      procedure :: request_workload => request_caller_request_workload
@@ -42,8 +43,8 @@ contains
     call MPI_COMM_SIZE (req%comm, req%n_workers)
     !! Exclude master rank (0) from set of workers.
     req%n_workers = req%n_workers - 1
-    if (req%n_workers < 1) then
-       call msg_fatal ("Cannot handle less than 2 ranks in a master/slave global queue.")
+    if (.not. req%has_workers ()) then
+       call msg_fatal ("Must not handle less than 3 ranks in a master/slave global queue.")
     end if
     req%n_channels = n_channels
     call req%state%init (comm, req%n_workers)
@@ -71,6 +72,12 @@ contains
     call req%base_write (u)
     call req%state%write (u)
   end subroutine request_caller_write
+
+  logical function request_caller_has_workers (req) result (flag)
+    class(request_caller_t), intent(in) :: req
+    !! n_workers excludes the master rank.
+    flag = (req%n_workers > 1)
+  end function request_caller_has_workers
 
   subroutine request_caller_update_balancer (req, weight, parallel_grid)
     class(request_caller_t), intent(inout) :: req

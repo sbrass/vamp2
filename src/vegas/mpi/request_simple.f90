@@ -21,6 +21,7 @@ module request_simple
    contains
      procedure :: init => request_simple_init
      procedure :: write => request_simple_write
+     procedure :: has_workers => request_simple_has_workers
      procedure :: update => request_simple_update
      procedure :: get_request_master => request_simple_get_request_master
      !! deferred.
@@ -89,6 +90,11 @@ contains
     write (u, "(A,25(1X,L1))") "PARALLEL_GRID", req%parallel_grid(:n_size)
     call req%base_write (u)
   end subroutine request_simple_write
+
+  logical function request_simple_has_workers (req) result (flag)
+    class(request_simple_t), intent(in) :: req
+    flag = (req%n_workers > 1)
+  end function request_simple_has_workers
 
   integer function request_simple_get_request_master (req, channel) &
        result (rank)

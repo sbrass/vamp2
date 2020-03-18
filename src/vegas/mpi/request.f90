@@ -67,6 +67,7 @@ module request_base
      procedure :: base_write => request_base_write
      procedure(request_base_deferred_write), deferred :: write
      procedure :: is_master => request_base_is_master
+     procedure(request_base_has_workers), deferred :: has_workers
      procedure :: get_external_comm => request_base_get_external_comm
      procedure :: add_balancer => request_base_add_balancer
      procedure :: add_handler => request_base_add_handler
@@ -90,6 +91,15 @@ module request_base
        class(request_base_t), intent(in) :: req
        integer, intent(in), optional :: unit
      end subroutine request_base_deferred_write
+
+     !> Verify if request object has workers.
+     !!
+     !! An implementation shall return if there at least two workers, or otherwisely stated,
+     !! one master and one slave at least, when both are used as computing ranks.
+     logical function request_base_has_workers (req) result (flag)
+       import :: request_base_t
+       class(request_base_t), intent(in) :: req
+     end function request_base_has_workers
 
      !> Request workload and returns an request_t object.
      !!
