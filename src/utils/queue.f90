@@ -109,12 +109,12 @@ contains
     if (queue%is_empty ()) then
        write (u, *) "Empty Queue."
     else
-       write (u, *) "Front →", queue%front
-       write (u, *) "Items →"
+       write (u, *) "Front ->", queue%front
+       write (u, *) "Items ->"
        do i = 1, queue%rear
           write (u, *) queue%item(i)
        end do
-       write (u, *) "Rear →", queue%rear
+       write (u, *) "Rear ->", queue%rear
     end if
   end subroutine queue_write
 end module queue

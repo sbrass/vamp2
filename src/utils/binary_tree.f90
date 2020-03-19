@@ -8,7 +8,7 @@ module binary_tree
   type :: binary_tree_iterator_t
      integer, dimension(:), allocatable :: key
      integer :: current
-     !! current ∈ {1, N}.
+     !! current \in {1, N}.
    contains
      procedure :: init => binary_tree_iterator_init
      procedure :: is_iterable => binary_tree_iterator_is_iterable
@@ -232,11 +232,11 @@ contains
     balance = subtree%get_balance ()
     node => subtree
     newNode => null ()
-    !! balance ≔ h_left - h_right.
-    !! Proof: balance > 0 ⇒ too many elements on the left side of the subtree.
-    !! Proof: balance < 0 ⇒ too many elements on the right side of the subtree.
+    !! balance := h_left - h_right.
+    !! Proof: balance > 0 => too many elements on the left side of the subtree.
+    !! Proof: balance < 0 => too many elements on the right side of the subtree.
     if (balance > 1) then
-       !! ⇒ left-side of subtree
+       !! => left-side of subtree
        !!      A3(2)         B2(1)
        !!     /             /    \
        !!    B2(1)         C1(0)  A1(0)
@@ -256,7 +256,7 @@ contains
           call btree%rotate_right (node, newNode)
        end if
     else if (balance < -1) then
-       !! ⇒ right-side of subtree
+       !! => right-side of subtree
        !!   A0(2)           B1(1)
        !!    \             /    \
        !!     B1(1)       A1(0)  C3(0)

@@ -84,7 +84,7 @@ contains
     iter%current = iter%current + iter%step
   end subroutine iterator_next_step
 
-  !! Proof: begin ≤ current ≤ end.
+  !! Proof: begin <= current <= end.
   !! However, after applying the step, this does not need to be true..
   function iterator_next (iter) result (ndx)
     class(iterator_t), intent(inout) :: iter

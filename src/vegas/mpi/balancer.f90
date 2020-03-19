@@ -116,7 +116,7 @@ module balancer_base
      !! Return worker as given, however, if extended type is used in a non-local
      !! or in combination with a commnuicative request type, then check on activation status of associated resource.
      !!
-     !! \return worker Valid worker index (∈ {1, …, N}) only on active resource*, else -1.
+     !! \return worker Valid worker index (\in {1, …, N}) only on active resource*, else -1.
      pure integer function balancer_base_get_resource_master (balancer, resource_id) &
           result (worker)
        import :: balancer_base_t
@@ -159,14 +159,14 @@ module balancer_base
   public :: shift_rank_to_worker, shift_worker_to_rank
 contains
   !> Shift rank index to worker index.
-  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
+  !! Proof: rank \in {0, …, N - 1}, worker \in {1, …, N}
   elemental integer function shift_rank_to_worker (rank) result (worker)
     integer, intent(in) :: rank
     worker = rank + 1
   end function shift_rank_to_worker
 
   !> Shift worker index to rank index.
-  !! Proof: rank ∈ {0, …, N - 1}, worker ∈ {1, …, N}
+  !! Proof: rank \in {0, …, N - 1}, worker \in {1, …, N}
   elemental integer function shift_worker_to_rank (worker) result (rank)
     integer, intent(in) :: worker
     rank = worker - 1

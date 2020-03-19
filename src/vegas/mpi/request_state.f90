@@ -27,11 +27,11 @@ module request_state
      integer :: n_workers = 0
      integer :: n_workers_done = 0
      !! From MPI-3.1 book
-     !! i ∈ {1, N_workes_done}, max size = N_workers
+     !! i \in {1, N_workes_done}, max size = N_workers
      type(MPI_Request), dimension(:), allocatable :: request
      type(MPI_Status), dimension(:), allocatable :: status
      integer, dimension(:), allocatable :: indices
-     !! i ∈ {1, N_workers}
+     !! i \in {1, N_workers}
      integer, dimension(:), allocatable :: handler
      logical, dimension(:), allocatable :: terminated
      type(iterator_t) :: request_iterator
@@ -176,7 +176,7 @@ contains
          rank = state%indices(i)
          if (.not. state%terminated(rank)) cycle
          state%request(rank) = MPI_REQUEST_NULL
-         !! Proof: i ≤ n_workers_done, n_workers_done ≤ n_workers.
+         !! Proof: i <= n_workers_done, n_workers_done <= n_workers.
          if (i < state%n_workers_done) &
               !! Last element does not require relocation.
               state%indices(i:state%n_workers_done - 1) = state%indices(i + 1:state%n_workers_done)
@@ -189,9 +189,9 @@ contains
     class(request_state_t), intent(inout) :: state
     integer :: error
     if (state%is_terminated ()) return
-    !! Proof: REQUEST(i), i ∈ {1, N_workers}, i is equivalent to rank.
-    !! Proof: INDICES(j), STATUS(j), j ∈ {1, N_workers_done}
-    !! Proof: INDICES(j) → i, injectiv.
+    !! Proof: REQUEST(i), i \in {1, N_workers}, i is equivalent to rank.
+    !! Proof: INDICES(j), STATUS(j), j \in {1, N_workers_done}
+    !! Proof: INDICES(j) -> i, injectiv.
     call MPI_WAITSOME (state%n_workers, state%request, state%n_workers_done, &
          state%indices, state%status, error)
     if (error /= 0) then

@@ -42,9 +42,9 @@ module array_list
      private
      integer, dimension(:), allocatable :: array
      !! Track the index to *current* item, to be stored.
-     !! Must fulfill: 0 ≤ count ≤ size.
+     !! Must fulfill: 0 <= count <= size.
      integer :: count = 0
-     !! size ∈ N.
+     !! size \in N.
      integer :: size = 0
    contains
      procedure :: write => array_list_write

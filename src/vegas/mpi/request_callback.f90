@@ -78,7 +78,7 @@ module request_callback
      !> Handle a request from server side.
      !!
      !! The message tag can be used in order to uniquify the respective messages between master and slave.
-     !! E.g. by explicitly setting it, or by using it in a computation i * N_R + j, i ∈ {1, …, N} and j ∈ {1, …, N_R}.
+     !! E.g. by explicitly setting it, or by using it in a computation i * N_R + j, i \in {1, …, N} and j \in {1, …, N_R}.
      !!
      !! Must set *activated* to .true. when called.
      !! \param[in] source Integer rank of the source in comm.
@@ -136,7 +136,7 @@ contains
   !! \param[inout] handler Handler must be intent inout, as the calling function may already manipulated the extended object.
   !! \param[in] n_requests Number of MPI requests the objects needs to be able to handle.
   !! \param[in] tag_offset First tag to be used, all other must follow in an increasing manner until tag_offset + (N_r + 1).
-  !! Proof: tag ∈ {tag_offset, tag_offset + n_requests}.
+  !! Proof: tag \in {tag_offset, tag_offset + n_requests}.
   subroutine request_handler_allocate (handler, n_requests, tag_offset)
     class(request_handler_t), intent(inout) :: handler
     integer, intent(in) :: n_requests

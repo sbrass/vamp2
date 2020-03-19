@@ -129,9 +129,9 @@ contains
        result (worker)
     class(balancer_simple_t), intent(in) :: balancer
     integer, intent(in) :: channel
-    !! Proof: channel ∈ {1, N_c}, number of workers N, rank ∈ {0, …, N - 1}
-    !! Proof: worker ∈ {1, …, N}
-    !! a = b mod c, then 0 ≤ a < c
+    !! Proof: channel \in {1, N_c}, number of workers N, rank \in {0, …, N - 1}
+    !! Proof: worker \in {1, …, N}
+    !! a = b mod c, then 0 <= a < c
     worker = mod (channel - 1, balancer%n_workers) + 1
   end function balancer_simple_map_channel_to_worker
 

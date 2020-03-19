@@ -469,7 +469,7 @@ contains
     real(default) :: guarded_variance, sq_integral
     real(default) :: wgt, chi
     !! Guard against zero variance.
-    !! Δ = I * ε → I = Δ.
+    !! \Delta = I * \epsilon -> I = \Delta.
     if (variance < epsilon (1._default) &
          * max (integral**2, 1._default)) then
        guarded_variance = epsilon (1._default) &
