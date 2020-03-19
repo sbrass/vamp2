@@ -60,7 +60,7 @@ contains
   !! The simple approach assigns each worker several channel by a modular mapping from the set of workers {0, …, N} to the set of channels {1, …, N_c}.
   !! Vetoing on those channel which have a parallel grid (check the definition in vegas.f90), where all workers are assigned.
   !!
-  !! w = \phi(c) = (c - 1) mod N, if not P(c), else \all w to c.
+  !! w = \phi(c) = (c - 1) mod N, if not P(c), else \forall w to c.
   !!
   !! The information is stored in a dynamic-sized array list, which is filled, reversed and then used in a stack-like manner keeping track of the unassigned channels.
   !! Assigned and finished channels are then moved to the finished stack.
