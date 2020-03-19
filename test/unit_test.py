@@ -9,19 +9,16 @@ import difflib
 assert(len(sys.argv) > 2), "Require two arguments: (i) path to executable, (ii) path to reference files (without .err/.out)."
 
 ut_executable = sys.argv[1]
-ut_reference_file = path.splitext(sys.argv[2])[0]
-ut_reference_err = f"{ut_reference_file}.err"
-ut_reference_out = f"{ut_reference_file}.out"
-
-ut_log_err = f"{ut_executable}.err"
-ut_log_out = f"{ut_executable}.out"
+ut_reference_file = sys.argv[2]
+ut_reference_basename = path.splitext(path.basename(ut_reference_file))[0]
+ut_log_file = f"{ut_reference_basename}.out"
 
 print(f"Unit test, execute {path.basename(ut_executable)} ...")
-print(f"Logging to {ut_log_err} and {ut_log_out} ...")
-with open(ut_log_err, "w") as log_err, open(ut_log_out, "w") as log_out:
+print(f"Logging to {ut_log_file} ...")
+with open(ut_log_file, "w") as log:
     ut_run = subprocess.run(f"./{ut_executable}",
-                            stderr=log_err,
-                            stdout=log_out)
+                            stderr=log,
+                            stdout=log)
 
 if ut_run.check_returncode () == None:
     print(f"... succeeded: {ut_run.returncode}")
@@ -39,16 +36,10 @@ def print_diff (file_log, file_ref):
        sys.stderr.writelines(diff)
 
 flag = ut_run.returncode == 0
-diff_flag = compare_log_and_ref (ut_log_err, ut_reference_err)
+diff_flag = compare_log_and_ref (ut_log_file, ut_reference_file)
 if not diff_flag:
-    print(f"Difference in {ut_log_err}...")
-    print_diff(ut_log_err, ut_reference_err)
-flag = flag and diff_flag
-
-diff_flag = compare_log_and_ref (ut_log_out, ut_reference_out)
-if not diff_flag:
-    print(f"Difference in {ut_log_out}...")
-    print_diff(ut_log_out, ut_reference_out)
+    print(f"Difference in {ut_log_file}...")
+    print_diff(ut_log_file, ut_reference_file)
 flag = flag and diff_flag
 
 # Forward exit-code.

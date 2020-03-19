@@ -17,10 +17,10 @@ binary_tree_1 = executable('binary_tree_1', 'binary_tree_1.f90',
 #                        link_with : utils)
 
 test('Signal.', signal_1)
-test('Simple queue.', queue_1)
-test('Array List.', array_list_1)
-test('Iterator.', iterator_1)
-test('Binary tree.', binary_tree_1, should_fail : true)
+test('Simple queue.', unit_test, args : [queue_1, ref_queue_1])
+test('Array List.', unit_test, args : [array_list_1, ref_array_list_1])
+test('Iterator.', unit_test, args : [iterator_1, ref_iterator_1])
+test('Binary tree.', unit_test, args : [binary_tree_1, ref_binary_tree_1], should_fail : true)
 
 if mpi_enabled
   result_handler = library('result_handler', 'result_handler.f90',
@@ -102,7 +102,7 @@ if mpi_enabled
   vegas_mpi_ut = executable('vegas_mpi_ut', 'vegas_mpi_ut.f90',
                             link_with : [utils, rng, vegas])
   # test('VEGAS (MPI).', unit_test, args : [vegas_mpi_ut, ref_vegas_mpi])
-  vamp2_simple_ut = executable('vamp2_simple_ut', 'vamp2_simple_ut.f90',
+  vamp2_simple_1 = executable('vamp2_simple_1', 'vamp2_simple_1.f90',
                             link_with : [utils,
                                          rng,
                                          vegas,
@@ -110,7 +110,7 @@ if mpi_enabled
                                          test_utils,
                                          signal],
                             link_language : 'fortran')
-  vamp2_simple_ut_2 = executable('vamp2_simple_ut_2', 'vamp2_simple_ut_2.f90',
+  vamp2_simple_2 = executable('vamp2_simple_2', 'vamp2_simple_2.f90',
                                link_with : [utils,
                                             rng,
                                             vegas,
@@ -118,7 +118,7 @@ if mpi_enabled
                                             test_utils,
                                             signal],
                                link_language : 'fortran')
-  vamp2_load_ut = executable('vamp2_load_ut', 'vamp2_load_ut.f90',
+  vamp2_load_1 = executable('vamp2_load_1', 'vamp2_load_1.f90',
                             link_with : [utils,
                                          rng,
                                          vegas,
@@ -126,7 +126,7 @@ if mpi_enabled
                                          test_utils,
                                          signal],
                             link_language : 'fortran')
-  vamp2_load_ut_2 = executable('vamp2_load_ut_2', 'vamp2_load_ut_2.f90',
+  vamp2_load_2 = executable('vamp2_load_2', 'vamp2_load_2.f90',
                              link_with : [utils,
                                           rng,
                                           vegas,

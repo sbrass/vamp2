@@ -105,7 +105,11 @@ contains
     c_hostname = ""
     c_size = 0
     c_status = c_gethostname (c_hostname, c_size)
-    hostname = trim (c_hostname)
+    if (c_status == 0) then
+       hostname = trim (c_hostname)
+    else
+       hostname = ""
+    end if
   end subroutine signal_get_hostname
 
   subroutine c_signal_handler_interrupt (signal) bind (C)
@@ -124,7 +128,7 @@ contains
     character(:), allocatable :: hostname
     call signal_get_hostname (hostname)
     pid = signal_getpid ()
-    write (ERROR_UNIT, "(A,1X,I8,3(1X,A))") "PID", pid, "on", hostname, "ready for attach..."
+    write (ERROR_UNIT, "(A,1X,I0,3(1X,A))") "PID", pid, "on", hostname, "ready for attach..."
     flush (ERROR_UNIT)
     i = 0
     do while (0 == i)

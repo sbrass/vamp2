@@ -1,0 +1,119 @@
+* ==================================================
+* Setup request_caller_t with callback
+* ==================================================
+* ==================================================
+* Initialize all handler (master only)
+* ==================================================
+[REQUEST_SIMPLE]
+N_CHANNELS 13
+N_WORKERS 1
+PARALLEL_GRID F F F T F F T T F F F F F
+[REQUEST BALANCER]
+N_WORKERS   1 N_RESOURCES  13 N_STATES   1
+[WORKER]
+RESOURCE   0 STATE   1 N_RESOURCES   0 ASSIGNED F
+[RESOURCE]
+RESOURCE_ID   1 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   2 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   3 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   4 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   5 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   6 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   7 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   8 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   9 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID  10 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID  11 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID  12 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID  13 ACTIVE F N_ASSIGNED_WORKERS   0
+[STATES]
+N_STATE_WORKERS 1
+MODE ONE-TO-ONE
+RESOURCE
+COUNT / SIZE  13  15
+   13   12   11   10    9    8    7    6    5    4    3    2    1    0    0
+FINISHED
+COUNT / SIZE   0  10
+    0    0    0    0    0    0    0    0    0    0
+Parallel Grids: F F F T F F T T F F F F F
+[REQUEST_CALLBACK_MANAGER]
+Number of elements  13
+*   8   4
+   >  10   3
+      >  12   2
+         >  13   1
+         <  11   1
+      <   9   1
+   <   4   3
+      >   6   2
+         >   7   1
+         <   5   1
+      <   2   2
+         >   3   1
+         <   1   1
+* ==================================================
+* Integrate
+* ==================================================
+RESOURCE   1
+RESOURCE   2
+RESOURCE   3
+RESOURCE   4
+RESOURCE   5
+RESOURCE   6
+RESOURCE   7
+RESOURCE   8
+RESOURCE   9
+RESOURCE  10
+RESOURCE  11
+RESOURCE  12
+RESOURCE  13
+* ==================================================
+* Finalization
+* ==================================================
+[REQUEST_SIMPLE]
+N_CHANNELS 13
+N_WORKERS 1
+PARALLEL_GRID F F F T F F T T F F F F F
+[REQUEST BALANCER]
+N_WORKERS   1 N_RESOURCES  13 N_STATES   1
+[WORKER]
+RESOURCE   0 STATE   1 N_RESOURCES  13 ASSIGNED F
+[RESOURCE]
+RESOURCE_ID   1 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   2 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   3 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   4 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   5 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   6 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   7 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   8 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   9 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID  10 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID  11 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID  12 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID  13 ACTIVE F N_ASSIGNED_WORKERS   1
+[STATES]
+N_STATE_WORKERS 1
+MODE ONE-TO-ONE
+RESOURCE
+COUNT / SIZE   0  15
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+FINISHED
+COUNT / SIZE  13  15
+    1    2    3    4    5    6    7    8    9   10   11   12   13    0    0
+Parallel Grids: F F F T F F T T F F F F F
+[REQUEST_CALLBACK_MANAGER]
+Number of elements  13
+*   8   4
+   >  10   3
+      >  12   2
+         >  13   1
+         <  11   1
+      <   9   1
+   <   4   3
+      >   6   2
+         >   7   1
+         <   5   1
+      <   2   2
+         >   3   1
+         <   1   1

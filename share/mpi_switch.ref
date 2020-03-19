@@ -1,0 +1,8 @@
+At line 45 of file ../test/mpi_switch.f90
+Fortran runtime error: Index '40' of dimension 1 of array 'channel_weight' outside of expected range (13:1)
+
+Error termination. Backtrace:
+#0  0x55d3864b63b3 in MAIN__
+	at ../test/mpi_switch.f90:45
+#1  0x55d3864b63e9 in main
+	at ../test/mpi_switch.f90:4

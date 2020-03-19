@@ -1,6 +1,0 @@
-Warmup calls: 10000
-Warmup: 1.3846420 ± 0.0024806
-Final calls: 2000
-Final: 1.3869481 ± 0.0074902
-Exact: 1.3932040
-Error: 0.0062558 = 0.8351992 sigma

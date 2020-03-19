@@ -1,0 +1,207 @@
+* ==================================================
+* Setup
+* ==================================================
+[REQUEST BALANCER]
+N_WORKERS   1 N_RESOURCES   4 N_STATES   1
+[WORKER]
+RESOURCE   0 STATE   1 N_RESOURCES   0 ASSIGNED F
+[RESOURCE]
+RESOURCE_ID   1 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   2 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   3 ACTIVE F N_ASSIGNED_WORKERS   0
+RESOURCE_ID   4 ACTIVE F N_ASSIGNED_WORKERS   0
+[STATES]
+N_STATE_WORKERS 1
+MODE ONE-TO-ONE
+RESOURCE
+COUNT / SIZE   4  10
+    4    3    2    1    0    0    0    0    0    0
+FINISHED
+COUNT / SIZE   0  10
+    0    0    0    0    0    0    0    0    0    0
+Parallel Grids: F F T F
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 F
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING T
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 F
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
+* ==================================================
+BALANCER 1 1
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING T
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 F
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
+* ==================================================
+BALANCER 1 2
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING T
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 F
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
+* ==================================================
+BALANCER 1 3
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING T
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 T
+=> GROUP 1
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
+* ==================================================
+BALANCER 1 4
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 T
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING F
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 F
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
+* ==================================================
+[REQUEST BALANCER]
+N_WORKERS   1 N_RESOURCES   4 N_STATES   1
+[WORKER]
+RESOURCE   0 STATE   1 N_RESOURCES   4 ASSIGNED F
+[RESOURCE]
+RESOURCE_ID   1 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   2 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   3 ACTIVE F N_ASSIGNED_WORKERS   1
+RESOURCE_ID   4 ACTIVE F N_ASSIGNED_WORKERS   1
+[STATES]
+N_STATE_WORKERS 1
+MODE ONE-TO-ONE
+RESOURCE
+COUNT / SIZE   0  10
+    0    0    0    0    0    0    0    0    0    0
+FINISHED
+COUNT / SIZE   4  10
+    1    2    3    4    0    0    0    0    0    0
+Parallel Grids: F F T F
+* ==================================================
+* CHECK WORKER PENDING
+* ==================================================
+WORKER 1 F
+* ==================================================
+* CHECK WORKER ASSIGNABLE
+* ==================================================
+WORKER 1 F
+* ==================================================
+* CHECK BALANCER PENDING
+* ==================================================
+PENDING F
+* ==================================================
+* CHECK RESOURCE GROUP
+* ==================================================
+CHANNEL 1 F
+CHANNEL 2 F
+CHANNEL 3 F
+CHANNEL 4 F
+* ==================================================
+* CHECK RESOURCE MASTER
+* ==================================================
+CHANNEL 1 1
+CHANNEL 2 1
+CHANNEL 3 1
+CHANNEL 4 1
