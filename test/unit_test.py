@@ -20,7 +20,7 @@ with open(ut_log_file, "w") as log:
                             stderr=log,
                             stdout=log)
 
-if ut_run.check_returncode () == None:
+if ut_run.returncode == None:
     print(f"... succeeded: {ut_run.returncode}")
 else:
     print(f"... failed: {ut_run.returncode}")
@@ -40,10 +40,12 @@ diff_flag = compare_log_and_ref (ut_log_file, ut_reference_file)
 if not diff_flag:
     print(f"Difference in {ut_log_file}...")
     print_diff(ut_log_file, ut_reference_file)
-flag = flag and diff_flag
 
-# Forward exit-code.
-if flag:
-    sys.exit(0)
+if diff_flag:
+    # Forward exit-code.
+    if flag:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 else:
-    sys.exit(1)
+    sys.exit(-1)

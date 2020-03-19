@@ -1,3 +1,4 @@
+STOP 1
 * Insert fixed number of object into tree...
 * Search for all added objects in tree...
 - Has key   0 T
@@ -35,16 +36,6 @@ Number of elements  10
 Number of elements   0
 Binary tree is empty.
 * Insert fixed number of object into tree (reversed order)...
-          10
-           9
-           8
-           7
-           6
-           5
-           4
-           3
-           2
-           1
 * Iterate over binary tree...
 - KEY  -6 OBJ   9
 - KEY  -1 OBJ   8
@@ -60,5 +51,14 @@ Binary tree is empty.
 - Has key 123 F
 - Object found F
 * Insert a duplicate key...
+          10
+           9
+           8
+           7
+           6
+           5
+           4
+           3
+           2
+           1
 Error: MUST not insert duplicate key 1
-STOP 1
