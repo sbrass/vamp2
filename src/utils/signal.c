@@ -1,7 +1,12 @@
+#include <time.h>
+#include <errno.h>
+
 #include <sys/types.h>
 #include <signal.h>
 
 #include "c_signal.h"
+
+#include <stdio.h>
 
 // Convert our signal definition back to the standard signal definition.
 // We cannot directly implement the standard signals into Fortran
@@ -22,4 +27,34 @@ void c_signal(int sig, void handler (int)) {
 
 int c_raise(int sig) {
   return raise(convert_c_signal(sig));
+}
+
+void c_nanosleep(const int long seconds, const int long nanoseconds) {
+  const struct timespec req = {
+                               .tv_sec = seconds,
+                               .tv_nsec = nanoseconds
+  };
+  struct timespec rem;
+  int ret_val = nanosleep(&req, &rem);
+  if (ret_val == 0) return;
+  /* EFAULT Problem with copying information from user space. */
+
+  /* EINTR  The pause has been interrupted by a signal that was delivered */
+  /*        to the thread (see signal(7)).  The remaining sleep time has */
+  /*        been written into *rem so that the thread can easily call */
+  /*        nanosleep() again and continue with the pause. */
+
+  /* EINVAL The value in the tv_nsec field was not in the range 0 to */
+  /*        999999999 or tv_sec was negative. */
+  switch (ret_val) {
+  case EFAULT:
+    printf("errno: EFAULT\n");
+    break;
+  case EINTR:
+    printf("errno: EINTR\n");
+    break;
+  case EINVAL:
+    printf("errno: EINVAL\n");
+    break;
+  }
 }

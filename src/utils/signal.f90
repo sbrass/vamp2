@@ -40,17 +40,24 @@ module signal
        integer(c_int) :: seconds_left
      end function c_sleep
 
+     subroutine c_nanosleep (seconds, nanoseconds) bind(C, name="c_nanosleep")
+       import :: c_long
+       integer(c_long), intent(in), value :: seconds
+       integer(c_long), intent(in), value :: nanoseconds
+     end subroutine c_nanosleep
+
      integer(c_int) function c_gethostname (name, len) bind(C, name="gethostname") result (status)
        import :: c_int, c_char, c_size_t
        character(kind=c_char), dimension(*) :: name
        integer(kind=c_size_t), value :: len
      end function c_gethostname
   end interface
-
+ 
   public :: signal_signal, &
        signal_raise, &
        signal_getpid, &
        signal_sleep, &
+       signal_nanosleep, &
        signal_get_hostname, &
        c_signal_handler_interrupt, &
        signal_print_pid_and_wait
@@ -92,6 +99,15 @@ contains
        write (ERROR_UNIT, "(A,1X,I12)") "Sleep ended earlier", c_seconds
     end if
   end subroutine signal_sleep
+
+  subroutine signal_nanosleep (seconds, nseconds)
+    integer, intent(in) :: seconds
+    integer, intent(in) :: nseconds
+    integer(c_long) :: c_seconds, c_nanoseconds
+    c_seconds = seconds
+    c_nanoseconds = nseconds
+    call c_nanosleep (c_seconds, c_nanoseconds)
+  end subroutine signal_nanosleep
 
   integer function signal_getpid () result (pid)
     pid = c_getpid ()
