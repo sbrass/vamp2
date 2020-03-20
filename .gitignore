@@ -1,1 +1,7 @@
-build/*
+*
+!*.f90
+!*/*.f90
+!meson.build
+!*/meson.build
+!*/*.c
+!*/*.h
