@@ -470,8 +470,8 @@ contains
     real(default) :: wgt, chi
     !! Guard against zero (or negative) variance.
     !! \Delta = I * \epsilon -> I = \Delta.
-    if (variance < epsilon (integral) &
-         * max (integral**2, tiny(integral))) then
+    if (variance < &
+         max ((epsilon (integral) * integral)**2, tiny(integral))) then
        guarded_variance = &
             max ((epsilon (integral) * integral)**2, &
             tiny (integral))
