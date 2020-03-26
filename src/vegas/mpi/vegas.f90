@@ -518,12 +518,13 @@ contains
     real(default), intent(in) :: variance
     real(default) :: guarded_variance, sq_integral
     real(default) :: wgt, chi
-    !! Guard against zero variance.
+    !! Guard against zero (or negative) variance.
     !! \Delta = I * \epsilon -> I = \Delta.
-    if (variance < epsilon (1._default) &
-         * max (integral**2, 1._default)) then
-       guarded_variance = epsilon (1._default) &
-            * max (integral**2, 1._default)
+    if (variance < epsilon (integral) &
+         * max (integral**2, tiny(integral))) then
+       guarded_variance = &
+            max ((epsilon (integral) * integral)**2, &
+            tiny (integral))
     else
       guarded_variance = variance
     end if
