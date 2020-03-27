@@ -836,7 +836,7 @@ contains
       variance = self%config%n_calls * dot_product (self%weight**2, self%integrator%get_variance ())
       variance = sqrt (variance + sq_integral)
       variance = 1._default / self%config%n_calls * &
-           & (total_variance + total_integral) * (total_variance - total_integral)
+           & (variance + integral) * (variance - integral)
     end subroutine compute_integral_and_variance
 
     !> We compute the weight-averaged sum and maximum of the channel (integration) weights \f$w_{i,c}\f$.
