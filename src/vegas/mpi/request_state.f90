@@ -189,15 +189,29 @@ contains
     class(request_state_t), intent(inout) :: state
     integer :: error
     if (state%is_terminated ()) return
-    !! Proof: REQUEST(i), i \in {1, N_workers}, i is equivalent to rank.
-    !! Proof: INDICES(j), STATUS(j), j \in {1, N_workers_done}
-    !! Proof: INDICES(j) -> i, injectiv.
-    call MPI_WAITSOME (state%n_workers, state%request, state%n_workers_done, &
+    !! We verify that we have active handles associated with request state.
+    call MPI_TESTSOME (state%n_workers, state%request, state%n_workers_done, &
          state%indices, state%status, error)
     if (error /= 0) then
-       write (ERROR_UNIT, "(A)") "Error occured during await request..."
+       write (ERROR_UNIT, "(A)") "Error occured during await (testing) request..."
        stop 1
+    else if (state%n_workers_done == MPI_UNDEFINED) then
+       write (ERROR_UNIT, "(A)") "TEST_WAITSOME returned with MPI_UNDEFINED."
+       stop 1
+       !! Terminate all communication.
     end if
+    !! Wait a little bit...
+    if (state%n_workers_done == 0) then
+       !! Proof: REQUEST(i), i \in {1, N_workers}, i is equivalent to rank.
+       !! Proof: INDICES(j), STATUS(j), j \in {1, N_workers_done}
+       !! Proof: INDICES(j) -> i, injectiv.
+       call MPI_WAITSOME (state%n_workers, state%request, state%n_workers_done, &
+            state%indices, state%status, error)
+       if (error /= 0) then
+          write (ERROR_UNIT, "(A)") "Error occured during await request..."
+          stop 1
+       end if
+    endif
     call state%request_iterator%init (1, state%n_workers_done)
   end subroutine request_state_await_request
 
