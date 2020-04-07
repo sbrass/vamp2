@@ -158,6 +158,4 @@ else
   test('VAMP2.', unit_test, args : [vamp2_ut, ref_vamp2])
 endif
 
-# mpi_comm_dup = executable('mpi_comm_dup', 'mpi_comm_dup.f90')
-
-# ice_gfortran = executable('ice-gfortran', 'ice-gfortran.f90')
+subdir('benchmark')

@@ -52,7 +52,7 @@ module signal
        integer(kind=c_size_t), value :: len
      end function c_gethostname
   end interface
- 
+
   public :: signal_signal, &
        signal_raise, &
        signal_getpid, &
