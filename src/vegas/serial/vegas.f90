@@ -154,6 +154,7 @@ module vegas
      procedure, public :: reset_result => vegas_reset_result
      procedure, public :: reset_grid => vegas_reset_grid
      procedure, public :: refine => vegas_refine_grid
+     procedure, private :: average_distribution => vegas_average_distribution
      procedure, public :: integrate => vegas_integrate
      procedure, private :: random_point => vegas_random_point
      procedure, private :: simple_random_point => vegas_simple_random_point
@@ -340,69 +341,33 @@ contains
   function vegas_grid_get_probability (self, x) result (g)
     class(vegas_grid_t), intent(in) :: self
     real(default), dimension(:), intent(in) :: x
-    integer, parameter :: N_BINARY_SEARCH = 100
-    real(default) :: g, y
+    real(default) :: g
     integer :: j, i_lower, i_higher, i_mid
-    g = 1.
-    if (self%n_bins > N_BINARY_SEARCH) then
-       g = binary_search (x)
-    else
-       g = linear_search (x)
+    real(default), dimension(size(x)) :: y
+    g = 1
+    y = (x - self%x_lower) / self%delta_x
+    ! if (any (y < 0 .or. y > 1)) then
+    if (any (y < 0 .or. y > 1)) then
+       g = 0; return
     end if
+    ndim: do j = 1, self%n_dim
+       i_lower = 1
+       i_higher = self%n_bins + 1
+       !! Left-most search
+       search: do while (i_lower < i_higher - 1)
+          i_mid = floor ((i_higher + i_lower) / 2.)
+          if (y(j) > self%xi(i_mid, j)) then
+             i_lower = i_mid
+          else
+             i_higher = i_mid
+          end if
+       end do search
+       g = g * (self%delta_x(j) * &
+            & self%n_bins * (self%xi(i_lower + 1, j) - self%xi(i_lower, j)))
+    end do ndim
     ! Move division to the end, which is more efficient.
-    if (g /= 0) g = 1. / g
-  contains
-    real(default) function linear_search (x) result (g)
-      real(default), dimension(:), intent(in) :: x
-      real(default) :: y
-      integer :: j, i
-      g = 1.
-      ndim: do j = 1, self%n_dim
-         y = (x(j) - self%x_lower(j)) / self%delta_x(j)
-         if (y >= 0. .and. y <= 1.) then
-            do i = 2, self%n_bins + 1
-               if (self%xi(i, j) > y) then
-                 g = g * (self%delta_x(j) * &
-                      & self%n_bins * (self%xi(i, j) - self%xi(i - 1, j)))
-                 cycle ndim
-              end if
-           end do
-           g = 0
-           exit ndim
-        else
-           g = 0
-           exit ndim
-        end if
-     end do ndim
-   end function linear_search
-
-   real(default) function binary_search (x) result (g)
-     real(default), dimension(:), intent(in) :: x
-     ndim: do j = 1, self%n_dim
-        y = (x(j) - self%x_lower(j)) / self%delta_x(j)
-        if (y >= 0. .and. y <= 1.) then
-           i_lower = 1
-           i_higher = self%n_bins + 1
-           search: do
-              if (i_lower >= (i_higher - 1)) then
-                 g = g * (self%delta_x(j) * &
-                      & self%n_bins * (self%xi(i_higher, j) - self%xi(i_higher - 1, j)))
-                 cycle ndim
-              end if
-              i_mid = (i_higher + i_lower) / 2
-              if (y > self%xi(i_mid, j)) then
-                 i_lower = i_mid
-              else
-                 i_higher = i_mid
-              end if
-           end do search
-        else
-           g = 0.
-           exit ndim
-        end if
-     end do ndim
-   end function binary_search
- end function vegas_grid_get_probability
+    if (g /= 0) g = 1 / g
+  end function vegas_grid_get_probability
 
   subroutine vegas_result_write (self, unit, indent)
     class(vegas_result_t), intent(in) :: self
@@ -793,43 +758,48 @@ contains
     call self%reset_result ()
   end subroutine vegas_reset_grid
 
-  subroutine vegas_refine_grid (self)
+  subroutine vegas_refine_grid (self, average)
+    class(vegas_t), intent(inout) :: self
+    logical, intent(in), optional :: average
+    logical :: opt_average
+    opt_average = .true.; if (present (average)) opt_average = average
+    if (opt_average) call self%average_distribution ()
+    call self%grid%resize (self%config%n_bins, self%d(:self%config%n_bins, :))
+  end subroutine vegas_refine_grid
+
+  !> Average and damp distribution.
+  !!
+  !! Average over nearest neighbor and apply damping method to ensure numerically stable grids.
+  !!
+  !! Must be called before grid refinement.
+  subroutine vegas_average_distribution (self)
     class(vegas_t), intent(inout) :: self
     integer :: j
-    real(default), dimension(self%config%n_bins, self%config%n_dim) :: w
     ndim: do j = 1, self%config%n_dim
-       call average_distribution (self%config%n_bins, self%d(:self%config&
-            &%n_bins, j), self%config%alpha, w(:, j))
+       associate (d => self%d(:self%config%n_bins, j), &
+            n_bins => self%config%n_bins)
+         if (self%config%n_bins > 2) then
+            d(1) = (d(1) + d(2)) / 2
+            d(2:n_bins - 1) = (d(1:n_bins - 2) + d(2:n_bins - 1) + d(3:n_bins)) /&
+                 & 3
+            d(n_bins) = d(n_bins - 1) + d(n_bins) / 2
+         end if
+         if (all (d < tiny (d))) then
+            d = 1; cycle ndim
+         end if
+         d = d / sum (d)
+         where (d < tiny (d))
+            d = tiny (d)
+         end where
+         where (d /= 1)
+            d = ((d - 1) / log(d))**self%config%alpha
+         elsewhere
+            ! Analytic limes for d -> 1
+            d = 1
+         end where
+       end associate
     end do ndim
-    call self%grid%resize (self%config%n_bins, w)
-  contains
-      subroutine average_distribution (n_bins, d, alpha, w)
-        integer, intent(in) :: n_bins
-        real(default), dimension(:), intent(inout) :: d
-        real(default), intent(in) :: alpha
-        real(default), dimension(n_bins), intent(out) :: w
-        if (n_bins > 2) then
-           d(1) = (d(1) + d(2)) / 2.0_default
-           d(2:n_bins - 1) = (d(1:n_bins - 2) + d(2:n_bins - 1) + d(3:n_bins)) /&
-                & 3.0_default
-           d(n_bins) = d(n_bins - 1) + d(n_bins) / 2.0_default
-        end if
-        w = 1.0_default
-        if (.not. all (d < tiny (1.0_default))) then
-           d = d / sum (d)
-           where (d < tiny (1.0_default))
-              d = tiny (1.0_default)
-           end where
-           where (d /= 1.0_default)
-              w = ((d - 1.) / log(d))**alpha
-           elsewhere
-              ! Analytic limes for d -> 1
-              w = 1.0_default
-           end where
-        end if
-      end subroutine average_distribution
-
-  end subroutine vegas_refine_grid
+  end subroutine vegas_average_distribution
 
   subroutine vegas_integrate (self, func, rng, iterations, reset_result,&
        & refine_grid, verbose, result, abserr)
@@ -940,7 +910,13 @@ contains
                & self%result%chi2, self%result%efficiency
           call msg_message ()
        end if
-       if (opt_refine_grid) call self%refine ()
+       if (opt_refine_grid) then
+          call self%refine (average = .true.)
+       else
+          !! Skip grid refinement, but average the (grid) distribution.
+          !! \note Now, we always average and dampen the distribution, even when not adapting (e.g. final pass).
+          call self%average_distribution ()
+       end if
     end do iteration
     if (present(result)) result = cumulative_int
     if (present(abserr)) abserr = abs(cumulative_std)

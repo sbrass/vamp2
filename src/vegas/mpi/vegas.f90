@@ -27,7 +27,6 @@
 ! to the source 'whizard.nw'
 
 module vegas
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
   use kinds, only: default
 
   use diagnostics
@@ -1220,6 +1219,7 @@ contains
           call self%refine (average = .true.)
        else
           !! Skip grid refinement, but average the (grid) distribution.
+          !! \note Now, we always average and dampen the distribution, even when not adapting (e.g. final pass).
           call self%average_distribution ()
        end if
     end do iteration

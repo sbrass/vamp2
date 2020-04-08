@@ -1,5 +1,4 @@
 module vamp2
-  use, intrinsic :: iso_fortran_env, only: ERROR_UNIT
 
   use kinds, only: default
   use io_units
