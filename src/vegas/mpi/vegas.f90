@@ -368,69 +368,33 @@ contains
   function vegas_grid_get_probability (self, x) result (g)
     class(vegas_grid_t), intent(in) :: self
     real(default), dimension(:), intent(in) :: x
-    integer, parameter :: N_BINARY_SEARCH = 100
-    real(default) :: g, y
+    real(default) :: g
     integer :: j, i_lower, i_higher, i_mid
-    g = 1.
-    if (self%n_bins > N_BINARY_SEARCH) then
-       g = binary_search (x)
-    else
-       g = linear_search (x)
+    real(default), dimension(size(x)) :: y
+    g = 1
+    y = (x - self%x_lower) / self%delta_x
+    ! if (any (y < 0 .or. y > 1)) then
+    if (any (y < 0 .or. y > 1)) then
+       g = 0; return
     end if
+    ndim: do j = 1, self%n_dim
+       i_lower = 1
+       i_higher = self%n_bins + 1
+       !! Left-most search
+       search: do while (i_lower < i_higher - 1)
+          i_mid = floor ((i_higher + i_lower) / 2.)
+          if (y(j) > self%xi(i_mid, j)) then
+             i_lower = i_mid
+          else
+             i_higher = i_mid
+          end if
+       end do search
+       g = g * (self%delta_x(j) * &
+            & self%n_bins * (self%xi(i_lower + 1, j) - self%xi(i_lower, j)))
+    end do ndim
     ! Move division to the end, which is more efficient.
-    if (g /= 0) g = 1. / g
-  contains
-    real(default) function linear_search (x) result (g)
-      real(default), dimension(:), intent(in) :: x
-      real(default) :: y
-      integer :: j, i
-      g = 1.
-      ndim: do j = 1, self%n_dim
-         y = (x(j) - self%x_lower(j)) / self%delta_x(j)
-         if (y >= 0. .and. y <= 1.) then
-            do i = 2, self%n_bins + 1
-               if (self%xi(i, j) > y) then
-                 g = g * (self%delta_x(j) * &
-                      & self%n_bins * (self%xi(i, j) - self%xi(i - 1, j)))
-                 cycle ndim
-              end if
-           end do
-           g = 0
-           exit ndim
-        else
-           g = 0
-           exit ndim
-        end if
-     end do ndim
-   end function linear_search
-
-   real(default) function binary_search (x) result (g)
-     real(default), dimension(:), intent(in) :: x
-     ndim: do j = 1, self%n_dim
-        y = (x(j) - self%x_lower(j)) / self%delta_x(j)
-        if (y >= 0. .and. y <= 1.) then
-           i_lower = 1
-           i_higher = self%n_bins + 1
-           search: do
-              if (i_lower >= (i_higher - 1)) then
-                 g = g * (self%delta_x(j) * &
-                      & self%n_bins * (self%xi(i_higher, j) - self%xi(i_higher - 1, j)))
-                 cycle ndim
-              end if
-              i_mid = (i_higher + i_lower) / 2
-              if (y > self%xi(i_mid, j)) then
-                 i_lower = i_mid
-              else
-                 i_higher = i_mid
-              end if
-           end do search
-        else
-           g = 0.
-           exit ndim
-        end if
-     end do ndim
-   end function binary_search
- end function vegas_grid_get_probability
+    if (g /= 0) g = 1 / g
+  end function vegas_grid_get_probability
 
   subroutine vegas_grid_broadcast (self, comm)
     class(vegas_grid_t), intent(inout) :: self
