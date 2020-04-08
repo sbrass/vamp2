@@ -32,8 +32,8 @@ contains
     class(benchmark_func_t), intent(in) :: self
     real(default), dimension(:), intent(in) :: x
     real(default) :: sleep_time
-    !! Sleep for 0.2 seconds.
-    call signal_nanosleep (seconds = 0, nseconds = 250000000)
+    !! Sleep for 100 μseconds.
+    ! call signal_nanosleep (seconds = 0, nseconds = 1)
     f = 1
   end function benchmark_func_evaluate_func
 end module benchmark_func

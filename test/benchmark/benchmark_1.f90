@@ -7,9 +7,8 @@ program main
   use rng_stream
 
   use request_base
-  use request_simple
-  use request_caller
 
+  use test_utils
   use signal
   use benchmark_func
   use cputime
@@ -21,11 +20,13 @@ program main
 
   implicit none
 
+  integer, parameter :: n_dim = 5, &
+       n_channels = 100
+
   type(vamp2_t) :: mc
   class(rng_t), allocatable :: rng
   class(vamp2_func_t), allocatable :: func
-  class(request_base_t), allocatable :: req
-  real(default), dimension(2), parameter :: x_lower = 0, &
+  real(default), dimension(n_dim), parameter :: x_lower = 0, &
        x_upper = 1
   real(default) :: result, abserr
 
@@ -33,28 +34,28 @@ program main
 
   call MPI_INIT ()
 
+  call identify_process ()
   call parse_cmdline ()
   call timer%start ()
 
   allocate (rng_stream_t :: rng)
   call rng%init ()
 
-  allocate (test_func_t :: func)
-  !! 2 → 6 hard scattering process
-  call func%init (n_dim = 14, n_channel = 2000)
+  allocate (benchmark_func_t :: func)
+  call func%init (n_dim = n_dim, n_channel = n_channels)
 
-  mc = vamp2_t (n_channel = 2000, n_dim = 14)
+  mc = vamp2_t (n_channel = n_channels, n_dim = n_dim)
 
   call mc%allocate_request (method = "load")
 
   call mc%set_limits (x_lower, x_upper)
-  call mc%set_calls (100000)
+  call mc%set_calls (10000)
 
   call mc%integrate (func, rng, 6, verbose = .true., result=result, abserr=abserr)
   write (ERROR_UNIT, "(A," // FMT_12 // ",A," // FMT_12 // ")") "Result:", result, "±", abserr
 
-  call mc%set_calls (100000)
-  call mc%integrate (func, rng, 4, verbose = .true., refine_grids = .false, adapt_weights = .false., &
+  call mc%set_calls (10000)
+  call mc%integrate (func, rng, 4, refine_grids = .false., adapt_weights = .false., verbose = .true., &
        result=result, abserr=abserr)
   write (ERROR_UNIT, "(A," // FMT_12 // ",1X,A,1X," // FMT_12 // ")") "Result:", result, "±", abserr
 
@@ -66,6 +67,13 @@ program main
 
   call MPI_FINALIZE ()
 contains
+  subroutine identify_process ()
+    integer :: rank
+    call MPI_COMM_RANK (MPI_COMM_WORLD, rank)
+    write (ERROR_UNIT, "(A,1X,I0,1X,A,1X,I0)") &
+         "RANK", rank, "PID", signal_getpid ()
+  end subroutine identify_process
+
   subroutine parse_cmdline ()
     integer :: n_workers, rank
     type(commandline_t) :: cmd

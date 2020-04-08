@@ -3,7 +3,8 @@ project('vamp2', ['fortran', 'c'],
   default_options : ['buildtype=debug',
                      'debug=true',
                      'optimization=0',
-                     'warning_level=3'],
+                     'warning_level=3',
+                     'fortran_std=f2008'],
   license : 'GPLv2')
 
 add_project_arguments('-cpp', language : 'fortran')
@@ -11,6 +12,12 @@ add_project_arguments('-fbacktrace', language : 'fortran')
 if get_option('buildtype') == 'debug'
   message('add compiler option -fcheck=all')
   add_project_arguments('-fcheck=all', language : 'fortran')
+endif
+
+if get_option('default_library') == 'static'
+  message('add profiling support (-pg) for static library')
+  add_project_arguments('-pg', language : ['fortran', 'c'])
+  add_project_link_arguments('-pg', language : ['fortran', 'c'])
 endif
 
 fortran_compiler = meson.get_compiler('fortran')
@@ -56,9 +63,9 @@ endif
 
 
 ## Test MPI_F08
-ompi = dependency('ompi', version : '>=2.0.0')
+mpi = dependency('mpi', language: 'fortran', version : '>=2.0.0')
 if get_option('mpi').enabled()
-  if not ompi.found()
+  if not mpi.found()
     error('OpenMPI not found.')
   endif
   code = '''
