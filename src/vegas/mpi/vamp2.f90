@@ -886,7 +886,9 @@ contains
              call self%apply_equivalences ()
           end if
           do ch = 1, self%config%n_channel
-             call self%integrator(ch)%refine ()
+             !! When we apply the grid refinement outside of VEGAS, then we do not average over distribution
+             !! as VEGAS averaged the distribution internally.
+             call self%integrator(ch)%refine (average = .false.)
           end do
        end if
     end do iteration

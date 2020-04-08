@@ -182,6 +182,7 @@ module vegas
      procedure, public :: reset_result => vegas_reset_result
      procedure, public :: reset_grid => vegas_reset_grid
      procedure, public :: refine => vegas_refine_grid
+     procedure, private :: average_distribution => vegas_average_distribution
      procedure, public :: integrate => vegas_integrate
      procedure, private :: random_point => vegas_random_point
      procedure, private :: simple_random_point => vegas_simple_random_point
@@ -692,6 +693,7 @@ contains
     class(vegas_handler_t), intent(inout) :: handler
     integer, intent(in) :: dest_rank
     type(MPI_COMM), intent(in) :: comm
+
     !! Take the complete contiguous array memory.
     call MPI_Isend (handler%d, size (handler%d),&
          & MPI_DOUBLE_PRECISION, dest_rank, handler%tag_offset, comm,&
@@ -1025,43 +1027,48 @@ contains
     call self%reset_result ()
   end subroutine vegas_reset_grid
 
-  subroutine vegas_refine_grid (self)
+  subroutine vegas_refine_grid (self, average)
+    class(vegas_t), intent(inout) :: self
+    logical, intent(in), optional :: average
+    logical :: opt_average
+    opt_average = .true.; if (present (average)) opt_average = average
+    if (opt_average) call self%average_distribution ()
+    call self%grid%resize (self%config%n_bins, self%d(:self%config%n_bins, :))
+  end subroutine vegas_refine_grid
+
+  !> Average and damp distribution.
+  !!
+  !! Average over nearest neighbor and apply damping method to ensure numerically stable grids.
+  !!
+  !! Must be called before grid refinement.
+  subroutine vegas_average_distribution (self)
     class(vegas_t), intent(inout) :: self
     integer :: j
-    real(default), dimension(self%config%n_bins, self%config%n_dim) :: w
     ndim: do j = 1, self%config%n_dim
-       call average_distribution (self%config%n_bins, self%d(:self%config&
-            &%n_bins, j), self%config%alpha, w(:, j))
+       associate (d => self%d(:self%config%n_bins, j), &
+            n_bins => self%config%n_bins)
+         if (self%config%n_bins > 2) then
+            d(1) = (d(1) + d(2)) / 2
+            d(2:n_bins - 1) = (d(1:n_bins - 2) + d(2:n_bins - 1) + d(3:n_bins)) /&
+                 & 3
+            d(n_bins) = d(n_bins - 1) + d(n_bins) / 2
+         end if
+         if (all (d < tiny (d))) then
+            d = 1; cycle ndim
+         end if
+         d = d / sum (d)
+         where (d < tiny (d))
+            d = tiny (d)
+         end where
+         where (d /= 1)
+            d = ((d - 1) / log(d))**self%config%alpha
+         elsewhere
+            ! Analytic limes for d -> 1
+            d = 1
+         end where
+       end associate
     end do ndim
-    call self%grid%resize (self%config%n_bins, w)
-  contains
-      subroutine average_distribution (n_bins, d, alpha, w)
-        integer, intent(in) :: n_bins
-        real(default), dimension(:), intent(inout) :: d
-        real(default), intent(in) :: alpha
-        real(default), dimension(n_bins), intent(out) :: w
-        if (n_bins > 2) then
-           d(1) = (d(1) + d(2)) / 2.0_default
-           d(2:n_bins - 1) = (d(1:n_bins - 2) + d(2:n_bins - 1) + d(3:n_bins)) /&
-                & 3.0_default
-           d(n_bins) = d(n_bins - 1) + d(n_bins) / 2.0_default
-        end if
-        w = 1.0_default
-        if (.not. all (d < tiny (1.0_default))) then
-           d = d / sum (d)
-           where (d < tiny (1.0_default))
-              d = tiny (1.0_default)
-           end where
-           where (d /= 1.0_default)
-              w = ((d - 1.) / log(d))**alpha
-           elsewhere
-              ! Analytic limes for d -> 1
-              w = 1.0_default
-           end where
-        end if
-      end subroutine average_distribution
-
-  end subroutine vegas_refine_grid
+  end subroutine vegas_average_distribution
 
   subroutine vegas_integrate (self, func, rng, iterations, reset_result,&
        & refine_grid, verbose, result, abserr)
@@ -1209,7 +1216,12 @@ contains
                & self%result%chi2, self%result%efficiency
           call msg_message ()
        end if
-       if (opt_refine_grid) call self%refine ()
+       if (opt_refine_grid) then
+          call self%refine (average = .true.)
+       else
+          !! Skip grid refinement, but average the (grid) distribution.
+          call self%average_distribution ()
+       end if
     end do iteration
     if (present(result)) result = cumulative_int
     if (present(abserr)) abserr = abs(cumulative_std)
