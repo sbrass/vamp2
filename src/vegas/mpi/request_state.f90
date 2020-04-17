@@ -40,7 +40,7 @@ module request_state
      procedure :: write => request_state_write
      procedure :: reset => request_state_reset
      procedure :: is_terminated => request_state_is_terminated
-     procedure :: set_terminated => request_state_set_terminated
+     procedure, private :: set_terminated => request_state_set_terminated
      procedure :: terminate => request_state_terminate
      procedure :: client_terminate => request_state_client_terminate
      procedure :: receive_request => request_state_receive_request

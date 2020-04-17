@@ -106,12 +106,24 @@ program main
      end select
   end if
 
-  channel: do while (channel_iter%is_iterable ())
+  channel: do
      call req%request_workload (request)
      call update_iter_and_rng (request, channel_iter, rng)
-     if (request%terminate) exit channel
+     if (request%terminate) then
+        exit channel
+     else if (.not. channel_iter%is_iterable ()) then
+        select type (req)
+        type is (request_caller_t)
+           call req%request_terminate ()
+           cycle channel
+        class is (request_base_t)
+           exit channel
+        end select
+     end if
      if (request%group) call MPI_BARRIER (request%comm)
-     current_channel = channel_iter%get_current () !! Serial
+     ! if (.not. channel_iterator%is_iterable ()) exit channel !! Serial
+     ! current_channel = channel_iter%get_current () !! Serial
+     current_channel = request%handler_id
      !! Assert (current_channel == request%handler_id)
      write (ERROR_UNIT, "(A,1X,I0)") "INTEGRATE", current_channel
      if (request%group_master) then
@@ -123,15 +135,6 @@ program main
      end if
      call channel_iter%next_step () !! Serial
   end do channel
-
-  if (.not. req%is_master () .and. .not. request%terminate) then
-     !! Sentinel against un-terminated worker.
-     !! However, do not interfere with RNG (status of current channel is undefined)
-     select type (req)
-     type is (request_caller_t)
-        call req%terminate ()
-     end select
-  end if
 
   write (ERROR_UNIT, "(A)") "* =================================================="
   write (ERROR_UNIT, "(A)") "* Finalization"

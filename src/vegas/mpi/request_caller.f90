@@ -133,7 +133,7 @@ contains
              call req%state%terminate (source)
           case (MPI_TAG_CLIENT_TERMINATE)
              !! Allow workers to request their own termination.
-             call req%state%set_terminated (source)
+             call req%state%terminate (source)
           case default
              call msg_warning ()
           end select

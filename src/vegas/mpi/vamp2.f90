@@ -824,13 +824,35 @@ contains
           end select
        end if
        !! END MPI
-       channel: do while (channel_iterator%is_iterable ())
-          !! No barrier here!!!
-          ch = channel_iterator%get_current ()
+       channel: do
           !! BEGIN MPI
+          !! Why: No barrier here!!!
+          !! Explain, communicator without master on caller... handling
+          select type (req => self%request)
+          type is (request_caller_t)
+             if (self%request%is_master ()) exit channel
+          end select
           call self%request%request_workload (request)
           call update_iter_and_rng (request, channel_iterator, rng)
-          if (request%terminate) exit channel
+          !! We have a request object and an advanced channel_iterator and have to consider three cases:
+          !! 1) channel_iterator drained, → request terminate and await terminate request from master
+          !! 2) request terminated, → channel_iterator and rng are correctly advanced by terminate
+          !! 3) request received.
+          !! When the channel_iterator is drained by update_iter_and_rng, we send a terminate request to the master
+          !! and await in the next cycle of channel loop the terminated request.
+          !! When the request is terminated, we can gracefully exit the channel loop as channel_iterator and rng are already advanced by update_iter_and_rng.
+          !! When we received a genuine request, then, we proceed as prophisied.
+          if (request%terminate) then
+             exit channel
+          else if (.not. channel_iterator%is_iterable ()) then
+             select type (req => self%request)
+             type is (request_caller_t)
+                call req%request_terminate ()
+                cycle channel
+             class is (request_base_t)
+                exit channel
+             end select
+          end if
           if (request%group) call MPI_BARRIER (request%comm)
           ch = request%handler_id
           call self%integrator(ch)%prepare_parallel_integrate(request%comm, &
@@ -852,15 +874,7 @@ contains
           call channel_iterator%next_step ()
        end do channel
        !! BEGIN MPI
-       if (.not. self%request%is_master () &
-            .and. .not. request%terminate) then
-          !! Sentinel against un-terminated worker.
-          !! However, do not interfere with RNG (status of current channel is undefined)
-          select type (req => self%request)
-          type is (request_caller_t)
-             call req%terminate ()
-          end select
-       end if
+       !! All communication of request, excluding the callback manager, must be closed.
        call reduce_func_calls (func)
        call self%request%await_handler ()
        call self%request%barrier ()

@@ -748,7 +748,8 @@ contains
     iteration: do it = 1, self%config%iterations
        call channel_iterator%init (1, self%config%n_channel)
        call self%prepare_integrate_iteration (func)
-       channel: do while (channel_iterator%is_iterable ())
+       channel: do
+          if (.not. channel_iterator%is_iterable ()) exit channel
           ch = channel_iterator%get_current ()
           call func%set_channel (ch)
           call self%integrator(ch)%integrate ( &
