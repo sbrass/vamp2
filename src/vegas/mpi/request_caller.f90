@@ -29,7 +29,7 @@ module request_caller
      procedure :: request_workload => request_caller_request_workload
      procedure :: release_workload => request_caller_release_workload
      procedure :: handle_and_release_workload => request_caller_handle_and_release_workload
-     procedure :: terminate => request_caller_terminate
+     procedure :: request_terminate => request_caller_request_terminate
   end type request_caller_t
 
   public :: request_caller_t
@@ -207,9 +207,9 @@ contains
     call req%call_client_handler (request%handler_id)
   end subroutine request_caller_handle_and_release_workload
 
-  subroutine request_caller_terminate (req)
+  subroutine request_caller_request_terminate (req)
     class(request_caller_t), intent(inout) :: req
     if (req%is_master ()) return
     call req%state%client_terminate ()
-  end subroutine request_caller_terminate
+  end subroutine request_caller_request_terminate
 end module request_caller
