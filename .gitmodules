@@ -1,3 +1,12 @@
-[submodule "bats"]
-	path = bats
-	url = git@github.com:sstephenson/bats.git
+[submodule "bats-core"]
+	path = test/libs
+	url = git@github.com:bats-core/bats-core.git
+[submodule "bats-assert"]
+	path = test/libs/bats-assert
+	url = git@github.com:bats-core/bats-assert.git
+[submodule "bats-support"]
+	path = test/libs/bats-support
+	url = git@github.com:bats-core/bats-support.git
+[submodule "test/libs/bats-core"]
+	path = test/libs/bats-core
+	url = git@github.com:bats-core/bats-core.git
