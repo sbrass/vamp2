@@ -170,18 +170,13 @@ contains
     end do
   contains
     subroutine sanitize_from_terminated_ranks ()
-      integer :: i, rank
+      integer :: n_workers_done
+      integer, dimension(:), allocatable :: indices
       !! Remove terminated ranks from done workers.
-      do i = 1, state%n_workers_done
-         rank = state%indices(i)
-         if (.not. state%terminated(rank)) cycle
-         state%request(rank) = MPI_REQUEST_NULL
-         !! Proof: i <= n_workers_done, n_workers_done <= n_workers.
-         if (i < state%n_workers_done) &
-              !! Last element does not require relocation.
-              state%indices(i:state%n_workers_done - 1) = state%indices(i + 1:state%n_workers_done)
-         state%n_workers_done = state%n_workers_done - 1
-      end do
+      indices = pack(state%indices(:state%n_workers_done), &
+           .not. state%terminated(state%indices(:state%n_workers_done)))
+      state%n_workers_done = size (indices)
+      state%indices(:state%n_workers_done) = indices
     end subroutine sanitize_from_terminated_ranks
   end subroutine request_state_receive_request
 
