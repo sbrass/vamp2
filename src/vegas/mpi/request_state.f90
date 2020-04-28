@@ -21,6 +21,8 @@ module request_state
        MPI_TAG_ASSIGN_GROUP = 64, &
        MPI_TAG_COMMUNICATOR_GROUP = 128
 
+  integer, parameter :: MPI_STATE_ERR = 1
+
   type :: request_state_t
      private
      type(MPI_COMM) :: comm
@@ -189,11 +191,12 @@ contains
          state%indices, state%status, error)
     if (error /= 0) then
        write (ERROR_UNIT, "(A)") "Error occured during await (testing) request..."
-       stop 1
+       call state%write (ERROR_UNIT)
+       call MPI_ABORT (state%comm, MPI_STATE_ERR)
     else if (state%n_workers_done == MPI_UNDEFINED) then
        write (ERROR_UNIT, "(A)") "TEST_WAITSOME returned with MPI_UNDEFINED."
-       stop 1
-       !! Terminate all communication.
+       call state%write (ERROR_UNIT)
+       call MPI_ABORT (state%comm, MPI_STATE_ERR)
     end if
     !! Wait a little bit...
     if (state%n_workers_done == 0) then
@@ -204,7 +207,8 @@ contains
             state%indices, state%status, error)
        if (error /= 0) then
           write (ERROR_UNIT, "(A)") "Error occured during await request..."
-          stop 1
+          call state%write (ERROR_UNIT)
+          call MPI_ABORT (state%comm, MPI_STATE_ERR)
        end if
     endif
     call state%request_iterator%init (1, state%n_workers_done)
@@ -303,4 +307,3 @@ contains
          0, tag, state%comm)
   end subroutine request_state_client_free
 end module request_state
-
