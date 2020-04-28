@@ -135,7 +135,7 @@ contains
     integer(c_int) :: pid
     write (ERROR_UNIT, "(A)") "HANDLER: SIGNAL INTERRUPT"
     write (ERROR_UNIT, "(A,1X,I2)") "Raised signal", signal
-    pid = getpid ()
+    pid = c_getpid ()
     write (ERROR_UNIT, "(A,1X,I8)") "Current PID", pid
     flush (ERROR_UNIT)
   end subroutine c_signal_handler_interrupt
@@ -149,7 +149,7 @@ contains
     flush (ERROR_UNIT)
     i = 0
     do while (0 == i)
-       call sleep (5)
+       call signal_sleep (5)
     end do
   end subroutine signal_print_pid_and_wait
 end module signal
