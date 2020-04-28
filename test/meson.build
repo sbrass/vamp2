@@ -7,6 +7,8 @@ signal_1 = executable('signal_1', ['signal_1.f90'],
                       link_with : signal)
 signal_2 = executable('signal_2', ['signal_2.f90'],
                       link_with : signal)
+signal_3 = executable('signal_3', ['signal_3.f90'],
+                      link_with : signal)
 queue_1 = executable('queue_1', 'queue_1.f90',
                      link_with : utils)
 array_list_1 = executable('array_list_1', 'array_list_1.f90',

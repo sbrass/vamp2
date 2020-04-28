@@ -1,8 +1,10 @@
 #include <time.h>
 #include <errno.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "c_signal.h"
 
@@ -27,6 +29,14 @@ void c_signal(int sig, void handler (int)) {
 
 int c_raise(int sig) {
   return raise(convert_c_signal(sig));
+}
+
+// Wrap hostname in order to handle errno with C
+int c_gethostname(char * name, size_t len) {
+  int ret_val = gethostname(name, len);
+  if (ret_val == 0) return ret_val;
+  printf("%s", strerror(errno));
+  return errno;
 }
 
 void c_nanosleep(const int long seconds, const int long nanoseconds) {

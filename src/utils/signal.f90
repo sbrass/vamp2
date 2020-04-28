@@ -46,9 +46,9 @@ module signal
        integer(c_long), intent(in), value :: nanoseconds
      end subroutine c_nanosleep
 
-     integer(c_int) function c_gethostname (name, len) bind(C, name="gethostname") result (status)
+     integer(c_int) function c_gethostname (name, len) bind(C, name="c_gethostname") result (status)
        import :: c_int, c_char, c_size_t
-       character(kind=c_char), dimension(*) :: name
+       character(kind=c_char), dimension(*), intent(out) :: name
        integer(kind=c_size_t), value :: len
      end function c_gethostname
   end interface
@@ -115,11 +115,12 @@ contains
 
   subroutine signal_get_hostname (hostname)
     character(:), allocatable, intent(out) :: hostname
-    character(len=256,kind=c_char) :: c_hostname
+    integer(c_size_t), parameter :: HOST_NAME_MAX = 64
+    character(len=HOST_NAME_MAX,kind=c_char) :: c_hostname
     integer(c_size_t) :: c_size
     integer(c_int) :: c_status
     c_hostname = ""
-    c_size = 0
+    c_size = HOST_NAME_MAX
     c_status = c_gethostname (c_hostname, c_size)
     if (c_status == 0) then
        hostname = trim (c_hostname)
