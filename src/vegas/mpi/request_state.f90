@@ -66,8 +66,8 @@ contains
     state%n_workers = n_workers
     state%n_workers_done = n_workers
     call state%request_iterator%init (1, n_workers)
-    allocate (state%request(state%n_workers))
-    allocate (state%status(state%n_workers))
+    allocate (state%request(state%n_workers), source = MPI_REQUEST_NULL)
+    allocate (state%status(state%n_workers), source = MPI_STATUS_IGNORE)
     allocate (state%handler(state%n_workers), source = MPI_EMPTY_HANDLER)
     allocate (state%indices(state%n_workers), source = 0)
     allocate (state%terminated(state%n_workers), source = .false.)
