@@ -44,7 +44,8 @@ contains
     !! Exclude master rank (0) from set of workers.
     req%n_workers = req%n_workers - 1
     if (.not. req%has_workers ()) then
-       call msg_fatal ("Must not handle less than 3 ranks in a master/slave global queue.")
+       call msg_warning ("Must not handle less than 3 ranks in a master/slave global queue.")
+       call MPI_ABORT (req%comm, 1)
     end if
     req%n_channels = n_channels
     call req%state%init (comm, req%n_workers)
