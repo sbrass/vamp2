@@ -71,7 +71,8 @@ contains
     u = given_output_unit (unit)
     write (u, "(A)") "[REQUEST_CALLER]"
     call req%base_write (u)
-    call req%state%write (u)
+    if (req%is_master ()) &
+       call req%state%write (u)
   end subroutine request_caller_write
 
   logical function request_caller_has_workers (req) result (flag)
