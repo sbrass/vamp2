@@ -111,7 +111,7 @@ contains
     end if
     if (present (string)) &
          call message_print (MESSAGE, string, unit=unit)
-    stop return_code
+    stop 1
     ! if (return_code /= 0) then
     !    call exit (return_code)
     ! else
