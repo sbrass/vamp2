@@ -45,6 +45,7 @@ module request_state
      procedure, private :: set_terminated => request_state_set_terminated
      procedure :: terminate => request_state_terminate
      procedure :: client_terminate => request_state_client_terminate
+     procedure :: init_request => request_state_init_request
      procedure :: receive_request => request_state_receive_request
      procedure :: await_request => request_state_await_request
      procedure :: has_request => request_state_has_request
@@ -149,6 +150,25 @@ contains
     end if
   end subroutine request_state_client_terminate
 
+  !> Init persistent requests.
+  !!
+  !! Must be called before first receive_request.
+  !! Free_request must be called after is_terminated returns true.
+  subroutine request_state_init_request (state)
+    class(request_state_t), intent(inout) :: state
+    integer :: i, rank, error
+    do i = 1, state%n_workers_done
+       rank = state%indices(i)
+       call MPI_RECV_INIT (state%handler(rank), 1, MPI_INTEGER, &
+            rank, MPI_ANY_TAG, state%comm, state%request(rank), error)
+       if (error /= 0) then
+          write (msg_buffer, "(A,2(A,1X,I0))") "Request: Error occured during receive init, &
+               & RANK", rank, "HANDLER", state%handler(rank)
+          call MPI_ABORT (state%comm, MPI_STATE_ERR)
+       end if
+    end do
+  end subroutine request_state_init_request
+
   !> Receive requests from non-terminated workers.
   !!
   !! Before receiving new requests, santize arrays of received ranks from terminated ones.
@@ -162,12 +182,11 @@ contains
     do i = 1, state%n_workers_done
        rank = state%indices(i)
        ! write (ERROR_UNIT, "(A,1X,I0,1X,A)") "RANK: ", rank, " | RECEIVE REQUEST"
-       call MPI_IRECV (state%handler(rank), 1, MPI_INTEGER, &
-            rank, MPI_ANY_TAG, state%comm, state%request(rank), error)
+       call MPI_START (state%request(rank), error)
        if (error /= 0) then
           write (msg_buffer, "(A,2(A,1X,I6))") "Request: Error occured during receive request, &
              & RANK", rank, "HANDLER", state%handler(rank)
-          call msg_bug ()
+          call MPI_ABORT (state%comm, MPI_STATE_ERR)
        end if
     end do
   contains

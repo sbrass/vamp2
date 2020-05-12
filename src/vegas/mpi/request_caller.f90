@@ -105,6 +105,7 @@ contains
        !! First, we receive their requests, then we overwrite their "original" tag to MPI_TAG_TERMINATE.
        !! Second, we iterate this, until all workers are terminated and return without doing any besides.
     end if
+    call req%state%init_request ()
     call req%state%receive_request ()
     do while (.not. req%state%is_terminated ())
        call req%state%await_request ()
@@ -140,13 +141,11 @@ contains
              call msg_warning ()
           end select
        end do
-       !! Termination state can be changed by clients, need to check again before pulling new requests.
-       if (req%state%is_terminated ()) exit
        call req%state%receive_request ()
     end do
     !! If we are here, there should be no leftover communnication.
     !! Hence, we must check whether there is no left-over communication call (from server-side).
-    ! call req%state%free_request ()
+    call req%state%free_request ()
   contains
     subroutine provide_request_group (handler_id, dest_rank)
       integer, intent(in) :: handler_id
