@@ -835,8 +835,8 @@ contains
           call self%request%request_workload (request)
           call update_iter_and_rng (request, channel_iterator, rng)
           !! We have a request object and an advanced channel_iterator and have to consider three cases:
-          !! 1) channel_iterator drained, → request terminate and await terminate request from master
-          !! 2) request terminated, → channel_iterator and rng are correctly advanced by terminate
+          !! 1) channel_iterator drained,
+          !! 2) request terminated,
           !! 3) request received.
           !! When the channel_iterator is drained by update_iter_and_rng, we send a terminate request to the master
           !! and await in the next cycle of channel loop the terminated request.
