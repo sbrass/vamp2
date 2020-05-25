@@ -806,7 +806,9 @@ contains
     if (opt_reset_result) call self%reset_result ()
     !! BEGIN MPI
     if (.not. allocated (self%request)) then
-       call msg_bug ("VAMP2: Request object not allocated.")
+       !! Provide simple method as fallback; do not disrupt testing output - be silent about it.
+       !! \note I dislike the "silent", we shall be always verbose about fallback solutions.
+       call self%allocate_request_by_method ("simple")
     end if
     !! END MPI
     iteration: do it = 1, self%config%iterations
